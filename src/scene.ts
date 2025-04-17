@@ -1,7 +1,7 @@
 import { Renderer } from "./renderer"
 
 abstract class Scene {
-	abstract init(): void
+	abstract init(r: Renderer): void
 	abstract update(dt: number): void
 	abstract render(r: Renderer): void
 

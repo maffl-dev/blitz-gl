@@ -3,8 +3,8 @@ import { WebGLRenderer } from "./renderer"
 import { TestScene } from "./scenes/test"
 
 const TILESIZE: number = 20
-const SCREEN_WIDTH: number = TILESIZE * 17
-const SCREEN_HEIGHT: number = TILESIZE * 11
+const SCREEN_WIDTH: number = 340
+const SCREEN_HEIGHT: number = 220
 
 const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement
 canvas.width = SCREEN_WIDTH

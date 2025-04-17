@@ -1,7 +1,20 @@
 export interface Renderer {
 	beginFrame(): void
-	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number): void
 	flush(): void
+	loadTexture(url: string): GLTexture
+
+	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number): void
+	drawTriangleTextured(
+		tex: WebGLTexture,
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
+	): void
+}
+
+export interface GLTexture extends WebGLTexture {
+	width: number;
+	height: number;
 }
 
 export class WebGLRenderer implements Renderer {
@@ -9,23 +22,27 @@ export class WebGLRenderer implements Renderer {
 	private gl: WebGL2RenderingContext;
 
 	private readonly MAX_TRIANGLES = 1024;
+	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
 
 	private program!: WebGLProgram;
 	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
 	private vertexCount = 0;
+	private useTextureLoc!: WebGLUniformLocation | null;
+	private textureEnabled: boolean = false;
+	private currentTexture: WebGLTexture | null = null;
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
 		if (!gl) throw new Error("WebGL2 not supported");
 		this.gl = gl;
 		this.canvas = canvas;
-		this.init();
+		this.initGL();
 	}
 
-	private init() {
+	private initGL() {
 		const gl = this.gl;
-		this.vertexData = new Float32Array(this.MAX_TRIANGLES * 3 * (2 + 4)); // 2 for position, 4 for color
+		this.vertexData = new Float32Array(this.MAX_TRIANGLES * 3 * this.VERTEX_SIZE); // 2 for position, 4 for color, 2 for uv
 
 		const vsSource = loadShader('/shaders/default.vs');
 		const fsSource = loadShader('/shaders/default.fs');
@@ -39,13 +56,32 @@ export class WebGLRenderer implements Renderer {
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, this.vertexData.byteLength, gl.DYNAMIC_DRAW);
 
+		const stride = this.VERTEX_SIZE * Float32Array.BYTES_PER_ELEMENT;
+
+		// Position attribute
 		const positionLoc = gl.getAttribLocation(this.program, "a_position");
-		const colorLoc = gl.getAttribLocation(this.program, "a_color");
-		const stride = 6 * Float32Array.BYTES_PER_ELEMENT;
+		if (positionLoc === -1) throw new Error("a_position not found in shader");
 		gl.enableVertexAttribArray(positionLoc);
 		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
+
+		// Color attribute
+		const colorLoc = gl.getAttribLocation(this.program, "a_color");
+		if (colorLoc === -1) throw new Error("a_color not found in shader");
 		gl.enableVertexAttribArray(colorLoc);
 		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+		// UV attribute
+		const uvLoc = gl.getAttribLocation(this.program, "a_uv");
+		if (uvLoc === -1) throw new Error("a_uv not found in shader");
+		gl.enableVertexAttribArray(uvLoc);
+		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
+
+		// Store uniform location for runtime toggle (optional)
+		this.useTextureLoc = gl.getUniformLocation(this.program, "u_useTexture");
+		if (!this.useTextureLoc) throw new Error("u_useTexture uniform not found in shader");
+
+		// Default to not using textures initially
+		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
 	}
 
 	beginFrame(): void {
@@ -53,25 +89,114 @@ export class WebGLRenderer implements Renderer {
 		gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 		gl.clearColor(0, 0, 0, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
-		this.vertexCount = 0; // reset batching
+		this.vertexCount = 0;
+		this.textureEnabled = false;
 	}
 
-	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number) {
-		const base = this.vertexCount * 6; // 6 floats per vertex
-		this.vertexData.set([x1, y1, r, g, b, a], base + 0);
-		this.vertexData.set([x2, y2, r, g, b, a], base + 6);
-		this.vertexData.set([x3, y3, r, g, b, a], base + 12);
-		this.vertexCount += 3;
-	}
-
-	flush() {
+	flush(): void {
 		const gl = this.gl;
-		const VERTEX_STRIDE = 6; // floats per vertex
+
+		if (this.textureEnabled && this.currentTexture) {
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, this.currentTexture);
+		} else {
+			gl.bindTexture(gl.TEXTURE_2D, null); // Optional: explicitly unbind texture
+		}
 
 		// Bind and update vertex data
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * VERTEX_STRIDE));
+		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * this.VERTEX_SIZE));
+
+		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
+
+		this.vertexCount = 0;
+		this.textureEnabled = false;
+	}
+
+	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number): void {
+		if (this.textureEnabled) {
+			this.flush();
+			this.textureEnabled = false;
+		}
+		const base = this.vertexCount * this.VERTEX_SIZE;
+		this.vertexData.set([x1, y1, r, g, b, a, 0.0, 0.0], base + 0);
+		this.vertexData.set([x2, y2, r, g, b, a, 0.0, 0.0], base + this.VERTEX_SIZE);
+		this.vertexData.set([x3, y3, r, g, b, a, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
+		this.vertexCount += 3;
+	}
+
+	drawTriangleTextured(
+		tex: GLTexture,
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
+	): void {
+		if (!this.textureEnabled || this.currentTexture !== tex) {
+			this.flush();
+			this.textureEnabled = true;
+			this.currentTexture = tex;
+			this.bindTexture(tex);
+		}
+		const base = this.vertexCount * this.VERTEX_SIZE;
+		this.vertexData.set([
+			x1, y1, r1, g1, b1, a1, u1, v1,
+			x2, y2, r2, g2, b2, a2, u2, v2,
+			x3, y3, r3, g3, b3, a3, u3, v3
+		], base);
+		this.vertexCount += 3;
+	}
+
+	drawQuad(x1: number, y1: number, x2: number, y2: number, r: number, g: number, b: number, a: number): void {
+		// First triangle (bottom left, bottom right, top left)
+		this.drawTriangle(x1, y1, x2, y1, x1, y2, r, g, b, a);
+
+		// Second triangle (bottom right, top right, top left)
+		this.drawTriangle(x2, y1, x2, y2, x1, y2, r, g, b, a);
+	}
+
+
+	loadTexture(url: string): GLTexture {
+		const gl = this.gl;
+		const texture = gl.createTexture() as GLTexture;
+		if (!texture) {
+			throw new Error("Failed to create texture");
+		}
+
+		// Bind the texture to texture unit 0
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+
+		// Set texture parameters (wrapping and filtering)
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+		// Load a 1x1 white pixel initially to prevent a blank canvas
+		const whitePixel = new Uint8Array([255, 255, 255, 255]); // RGBA white pixel
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, whitePixel);
+
+		// Load the image asynchronously
+		const image = new Image();
+		image.onload = () => {
+			// Once the image is loaded, upload it to the texture
+			gl.bindTexture(gl.TEXTURE_2D, texture);
+			gl.texImage2D(
+				gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image
+			);
+			texture.width = image.width / 340.0;
+			texture.height = image.height / 220.0;
+
+			// Mipmap generation (optional, but useful for scaling textures)
+			gl.generateMipmap(gl.TEXTURE_2D);
+		};
+
+		image.src = url;
+		return texture;
+	}
+
+	bindTexture(tex: GLTexture): void {
+		this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
 	}
 }
 
