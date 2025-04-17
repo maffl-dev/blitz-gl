@@ -11,9 +11,9 @@ export class WebGLRenderer implements Renderer {
 	private readonly MAX_TRIANGLES = 1024;
 
 	private program!: WebGLProgram;
+	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
 	private vertexCount = 0;
-	private vertexBuffer!: WebGLBuffer;
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
@@ -27,42 +27,20 @@ export class WebGLRenderer implements Renderer {
 		const gl = this.gl;
 		this.vertexData = new Float32Array(this.MAX_TRIANGLES * 3 * (2 + 4)); // 2 for position, 4 for color
 
-		const vsSource = `#version 300 es
-		precision mediump float;
-		in vec2 a_position;
-		in vec4 a_color;
-		out vec4 v_color;
-		void main() {
-			gl_Position = vec4(a_position, 0, 1);
-			v_color = a_color;
-		}
-   	 	`;
-		const fsSource = `#version 300 es
-			precision mediump float;
-			in vec4 v_color;
-			out vec4 outColor;
-			void main() {
-				outColor = v_color;
-			}
-    	`;
-		const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource)!;
-		const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
+		const vsSource = loadShader('/shaders/default.vs');
+		const fsSource = loadShader('/shaders/default.fs');
 
 		// Link program
-		const program = gl.createProgram()!;
-		gl.attachShader(program, vs);
-		gl.attachShader(program, fs);
-		gl.linkProgram(program);
-		gl.useProgram(program);
-		this.program = program;
+		this.program = createProgram(gl, vsSource, fsSource);
+		gl.useProgram(this.program);
 
 		// Create and setup position buffer
 		this.vertexBuffer = gl.createBuffer()!;
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, this.vertexData.byteLength, gl.DYNAMIC_DRAW);
 
-		const positionLoc = gl.getAttribLocation(program, "a_position");
-		const colorLoc = gl.getAttribLocation(program, "a_color");
+		const positionLoc = gl.getAttribLocation(this.program, "a_position");
+		const colorLoc = gl.getAttribLocation(this.program, "a_color");
 		const stride = 6 * Float32Array.BYTES_PER_ELEMENT;
 		gl.enableVertexAttribArray(positionLoc);
 		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
@@ -97,6 +75,33 @@ export class WebGLRenderer implements Renderer {
 	}
 }
 
+function loadShader(path: string): string {
+	const request = new XMLHttpRequest();
+	request.open('GET', path, false);  // false makes the request synchronous
+	request.send(null);
+
+	if (request.status === 200) {
+		return request.responseText;
+	} else {
+		throw new Error(`Failed to load shader: ${path}`);
+	}
+}
+
+function createProgram(gl: WebGL2RenderingContext, vsSource: string, fsSource: string): WebGLProgram {
+	const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource)!;
+	const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
+	const program = gl.createProgram();
+	if (!program) {
+		throw new Error("Failed to create program")
+	}
+	gl.attachShader(program, vs);
+	gl.attachShader(program, fs);
+	gl.linkProgram(program);
+	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+		throw new Error("Failed to link program:\n" + gl.getProgramInfoLog(program));
+	}
+	return program;
+}
 
 function compileShader(gl: WebGL2RenderingContext, type: GLenum, source: string): WebGLShader {
 	const shader = gl.createShader(type);
