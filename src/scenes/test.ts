@@ -19,7 +19,8 @@ class TestScene extends Scene {
 			r.drawTriangle(
 				x, y,           // bottom left
 				x + 0.1, y,     // bottom right 
-				x + 0.05, y + 0.1  // top center
+				x + 0.05, y + 0.1,  // top center
+				0.1 + 0.8 * i / 100.0, 0, 0, 1.0 // color
 			);
 		}
 	}

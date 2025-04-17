@@ -6,7 +6,7 @@ const TILESIZE: number = 20
 const SCREEN_WIDTH: number = TILESIZE * 17
 const SCREEN_HEIGHT: number = TILESIZE * 11
 
-const canvas: HTMLCanvasElement = document.createElement("canvas")
+const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement
 canvas.width = SCREEN_WIDTH
 canvas.height = SCREEN_HEIGHT
 const gameDiv: HTMLCanvasElement = document.querySelector("#game") as HTMLCanvasElement
