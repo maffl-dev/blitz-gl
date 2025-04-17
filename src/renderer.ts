@@ -10,6 +10,8 @@ export interface Renderer {
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
 	): void
+
+	setBlendmode(mode: BlendMode): void
 }
 
 export interface GLTexture extends WebGLTexture {
@@ -17,8 +19,17 @@ export interface GLTexture extends WebGLTexture {
 	height: number;
 }
 
+enum BlendMode {
+	Opaque,
+	Alpha, // Standard
+	Additive,
+	Multiply,
+}
+
 export class WebGLRenderer implements Renderer {
 	private canvas: HTMLCanvasElement;
+	private viewportWidth!: number;
+	private viewportHeight!: number;
 	private gl: WebGL2RenderingContext;
 
 	private readonly MAX_TRIANGLES = 1024;
@@ -30,7 +41,9 @@ export class WebGLRenderer implements Renderer {
 	private vertexCount = 0;
 	private useTextureLoc!: WebGLUniformLocation | null;
 	private textureEnabled: boolean = false;
+	private resolutionLoc!: WebGLUniformLocation | null;
 	private currentTexture: WebGLTexture | null = null;
+
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
@@ -38,6 +51,7 @@ export class WebGLRenderer implements Renderer {
 		this.gl = gl;
 		this.canvas = canvas;
 		this.initGL();
+		this.setViewportSize(canvas.width, canvas.height);
 	}
 
 	private initGL() {
@@ -82,6 +96,10 @@ export class WebGLRenderer implements Renderer {
 
 		// Default to not using textures initially
 		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
+
+		// resolution info
+		this.resolutionLoc = gl.getUniformLocation(this.program, "u_resolution")!
+		if (!this.resolutionLoc) throw new Error("u_resolution uniform not found in vs shader");
 	}
 
 	beginFrame(): void {
@@ -91,6 +109,7 @@ export class WebGLRenderer implements Renderer {
 		gl.clear(gl.COLOR_BUFFER_BIT);
 		this.vertexCount = 0;
 		this.textureEnabled = false;
+		this.setBlendmode(BlendMode.Alpha);
 	}
 
 	flush(): void {
@@ -147,15 +166,6 @@ export class WebGLRenderer implements Renderer {
 		this.vertexCount += 3;
 	}
 
-	drawQuad(x1: number, y1: number, x2: number, y2: number, r: number, g: number, b: number, a: number): void {
-		// First triangle (bottom left, bottom right, top left)
-		this.drawTriangle(x1, y1, x2, y1, x1, y2, r, g, b, a);
-
-		// Second triangle (bottom right, top right, top left)
-		this.drawTriangle(x2, y1, x2, y2, x1, y2, r, g, b, a);
-	}
-
-
 	loadTexture(url: string): GLTexture {
 		const gl = this.gl;
 		const texture = gl.createTexture() as GLTexture;
@@ -184,8 +194,8 @@ export class WebGLRenderer implements Renderer {
 			gl.texImage2D(
 				gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image
 			);
-			texture.width = image.width / 340.0;
-			texture.height = image.height / 220.0;
+			texture.width = image.width;
+			texture.height = image.height;
 
 			// Mipmap generation (optional, but useful for scaling textures)
 			gl.generateMipmap(gl.TEXTURE_2D);
@@ -195,9 +205,44 @@ export class WebGLRenderer implements Renderer {
 		return texture;
 	}
 
-	bindTexture(tex: GLTexture): void {
+	setBlendmode(mode: BlendMode): void {
+		const gl = this.gl;
+		switch (mode) {
+			case BlendMode.Opaque:
+				gl.disable(gl.BLEND);
+				break;
+			case BlendMode.Alpha:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+				break;
+			case BlendMode.Additive:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.ONE, gl.ONE);
+				break;
+			case BlendMode.Multiply:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+				break;
+			default:
+				throw new Error("unknown blendmode:" + mode);
+		}
+	}
+
+	private bindTexture(tex: GLTexture): void {
+		this.gl.activeTexture(this.gl.TEXTURE0);
 		this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
 	}
+
+	private setViewportSize(width: number, height: number): void {
+		const gl = this.gl;
+		this.viewportWidth = width;
+		this.viewportHeight = height;
+		gl.viewport(0, 0, width, height);
+		gl.useProgram(this.program);
+		gl.uniform2f(this.resolutionLoc, width, height);
+	}
+
+
 }
 
 function loadShader(path: string): string {
