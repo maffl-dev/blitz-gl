@@ -1,27 +1,52 @@
+export interface GLTexture extends WebGLTexture {
+	width: number;
+	height: number;
+}
+
 export interface Renderer {
+	// low level basics
 	beginFrame(): void
 	flush(): void
-	loadTexture(url: string): GLTexture
 
-	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number): void
+	// low level drawing funcs
+	drawTriangle(
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
+	): void
 	drawTriangleTextured(
 		tex: WebGLTexture,
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
 	): void
+	drawQuad(
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number,
+		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number
+	): void
+	drawQuadTextured(
+		tex: WebGLTexture,
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number,
+		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number, u4: number, v4: number
+	): void
 
+	// draw funcs
+	drawTexture(tex: GLTexture, x: number, y: number): void
+
+	// color
 	setBlendmode(mode: BlendMode): void
-}
 
-export interface GLTexture extends WebGLTexture {
-	width: number;
-	height: number;
+	// textures
+	loadTexture(url: string): GLTexture
 }
 
 enum BlendMode {
 	Opaque,
-	Alpha, // Standard
+	Alpha,
 	Additive,
 	Multiply,
 }
@@ -133,15 +158,20 @@ export class WebGLRenderer implements Renderer {
 		this.textureEnabled = false;
 	}
 
-	drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, r: number, g: number, b: number, a: number): void {
+	// low level draw funcs
+	drawTriangle(
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
+	): void {
 		if (this.textureEnabled) {
 			this.flush();
 			this.textureEnabled = false;
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
-		this.vertexData.set([x1, y1, r, g, b, a, 0.0, 0.0], base + 0);
-		this.vertexData.set([x2, y2, r, g, b, a, 0.0, 0.0], base + this.VERTEX_SIZE);
-		this.vertexData.set([x3, y3, r, g, b, a, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
+		this.vertexData.set([x1, y1, r1, g1, b1, a1, 0.0, 0.0], base);
+		this.vertexData.set([x2, y2, r2, g2, b2, a2, 0.0, 0.0], base + this.VERTEX_SIZE);
+		this.vertexData.set([x3, y3, r3, g3, b3, a3, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
 		this.vertexCount += 3;
 	}
 
@@ -164,6 +194,65 @@ export class WebGLRenderer implements Renderer {
 			x3, y3, r3, g3, b3, a3, u3, v3
 		], base);
 		this.vertexCount += 3;
+	}
+
+	drawQuad(
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number,
+		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number
+	): void {
+		this.drawTriangle(
+			x1, y1, r1, g1, b1, a1,
+			x2, y2, r2, g2, b2, a2,
+			x3, y3, r3, g3, b3, a3
+		);
+		this.drawTriangle(
+			x1, y1, r1, g1, b1, a1,
+			x3, y3, r3, g3, b3, a3,
+			x4, y4, r4, g4, b4, a4
+		);
+	}
+
+	drawQuadTextured(
+		tex: GLTexture,
+		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
+		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
+		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number,
+		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number, u4: number, v4: number
+	): void {
+		// Draw first triangle of quad
+		this.drawTriangleTextured(
+			tex,
+			x1, y1, r1, g1, b1, a1, u1, v1,
+			x2, y2, r2, g2, b2, a2, u2, v2,
+			x3, y3, r3, g3, b3, a3, u3, v3
+		);
+		// Draw second triangle of quad
+		this.drawTriangleTextured(
+			tex,
+			x1, y1, r1, g1, b1, a1, u1, v1,
+			x3, y3, r3, g3, b3, a3, u3, v3,
+			x4, y4, r4, g4, b4, a4, u4, v4
+		);
+	}
+
+	// draw funcs
+	drawTexture(tex: GLTexture, x: number = 0.0, y: number = 0.0): void {
+		const w = tex.width;
+		const h = tex.height;
+		this.drawTriangleTextured(
+			tex,
+			x, y, 1, 1, 1, 1, 0.0, 1.0,  // Bottom left (flipped v)
+			x + w, y, 1, 1, 1, 1, 1.0, 1.0,   // Bottom right
+			x, y + h, 1, 1, 1, 1, 0.0, 0.0    // Top left
+		);
+		this.drawTriangleTextured(
+			tex,
+			x + w, y, 1, 1, 1, 1, 1.0, 1.0,   // Bottom right
+			x + w, y + h, 1, 1, 1, 1, 1.0, 0.0,    // Top right
+			x, y + h, 1, 1, 1, 1, 0.0, 0.0    // Top left
+		);
 	}
 
 	loadTexture(url: string): GLTexture {
@@ -241,7 +330,6 @@ export class WebGLRenderer implements Renderer {
 		gl.useProgram(this.program);
 		gl.uniform2f(this.resolutionLoc, width, height);
 	}
-
 
 }
 
