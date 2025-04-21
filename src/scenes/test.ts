@@ -1,3 +1,4 @@
+import { semiGreen, white } from "../colors";
 import { GLTexture, Renderer } from "../renderer";
 import { Scene } from "../scene";
 
@@ -7,7 +8,7 @@ class TestScene extends Scene {
 
 	init(r: Renderer): void {
 		console.log("init test scene");
-		this.myTexture = r.loadTexture("/common/test.png")
+		this.myTexture = r.loadTex("/common/test.png")
 	}
 
 	update(dt: number): void {
@@ -15,8 +16,7 @@ class TestScene extends Scene {
 	}
 
 	render(r: Renderer): void {
-		const white = [1, 1, 1, 1] as const;
-
+		// low level: triangles and quads
 		for (let i = 0; i < 100; i++) {
 			const x = (i % 10) * 34;  // 10 columns of 34px each
 			const y = Math.floor(i / 10) * 22;  // 22px height per row
@@ -32,9 +32,8 @@ class TestScene extends Scene {
 			10, 10, ...white,
 			100, 10, ...white,
 			100, 100, ...white,
-			10, 100, ...white,
+			10, 100, 1.0, 0.0, 0.0, 1.0,
 		)
-
 		r.drawQuadTextured(
 			this.myTexture,
 			200, 10, ...white, 0, 1,    // Top left
@@ -43,7 +42,12 @@ class TestScene extends Scene {
 			200, 100, ...white, 0, 0,   // Bottom left
 		)
 
-		r.drawTexture(this.myTexture, 52, 52)
+		// textures & colors
+		r.setAlpha(0.7)
+		r.setColor(1.0, 0.2, 0.2)
+		r.drawTex(this.myTexture, 52, 52)
+		r.setColor(...semiGreen)
+		r.drawTex(this.myTexture, 182, 52)
 	}
 }
 

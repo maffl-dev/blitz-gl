@@ -1,3 +1,5 @@
+import { black, Color, white } from "./colors";
+
 export interface GLTexture extends WebGLTexture {
 	width: number;
 	height: number;
@@ -34,14 +36,15 @@ export interface Renderer {
 		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number, u4: number, v4: number
 	): void
 
-	// draw funcs
-	drawTexture(tex: GLTexture, x: number, y: number): void
-
 	// color
 	setBlendmode(mode: BlendMode): void
+	setColor(r: number, g: number, b: number, a?: number): void
+	setAlpha(a: number): void;
 
 	// textures
-	loadTexture(url: string): GLTexture
+	loadTex(url: string): GLTexture
+	drawTex(tex: GLTexture, x: number, y: number): void
+
 }
 
 enum BlendMode {
@@ -68,7 +71,7 @@ export class WebGLRenderer implements Renderer {
 	private textureEnabled: boolean = false;
 	private resolutionLoc!: WebGLUniformLocation | null;
 	private currentTexture: WebGLTexture | null = null;
-
+	private currentColor: Color = [...white];
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
@@ -130,10 +133,11 @@ export class WebGLRenderer implements Renderer {
 	beginFrame(): void {
 		const gl = this.gl;
 		gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-		gl.clearColor(0, 0, 0, 1);
+		gl.clearColor(...black);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 		this.vertexCount = 0;
 		this.textureEnabled = false;
+		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
 	}
 
@@ -237,25 +241,43 @@ export class WebGLRenderer implements Renderer {
 		);
 	}
 
-	// draw funcs
-	drawTexture(tex: GLTexture, x: number = 0.0, y: number = 0.0): void {
-		const w = tex.width;
-		const h = tex.height;
-		this.drawTriangleTextured(
-			tex,
-			x, y, 1, 1, 1, 1, 0.0, 1.0,  // Bottom left (flipped v)
-			x + w, y, 1, 1, 1, 1, 1.0, 1.0,   // Bottom right
-			x, y + h, 1, 1, 1, 1, 0.0, 0.0    // Top left
-		);
-		this.drawTriangleTextured(
-			tex,
-			x + w, y, 1, 1, 1, 1, 1.0, 1.0,   // Bottom right
-			x + w, y + h, 1, 1, 1, 1, 1.0, 0.0,    // Top right
-			x, y + h, 1, 1, 1, 1, 0.0, 0.0    // Top left
-		);
+	// color
+	setBlendmode(mode: BlendMode): void {
+		const gl = this.gl;
+		switch (mode) {
+			case BlendMode.Opaque:
+				gl.disable(gl.BLEND);
+				break;
+			case BlendMode.Alpha:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+				break;
+			case BlendMode.Additive:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.ONE, gl.ONE);
+				break;
+			case BlendMode.Multiply:
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+				break;
+			default:
+				throw new Error("unknown blendmode:" + mode);
+		}
 	}
 
-	loadTexture(url: string): GLTexture {
+	setColor(r: number, g: number, b: number, a?: number): void {
+		this.currentColor[0] = r
+		this.currentColor[1] = g
+		this.currentColor[2] = b
+		this.currentColor[3] = a ?? this.currentColor[3];
+	}
+
+	setAlpha(a: number): void {
+		this.currentColor[3] = a
+	}
+
+	// textures
+	loadTex(url: string): GLTexture {
 		const gl = this.gl;
 		const texture = gl.createTexture() as GLTexture;
 		if (!texture) {
@@ -294,29 +316,26 @@ export class WebGLRenderer implements Renderer {
 		return texture;
 	}
 
-	setBlendmode(mode: BlendMode): void {
-		const gl = this.gl;
-		switch (mode) {
-			case BlendMode.Opaque:
-				gl.disable(gl.BLEND);
-				break;
-			case BlendMode.Alpha:
-				gl.enable(gl.BLEND);
-				gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-				break;
-			case BlendMode.Additive:
-				gl.enable(gl.BLEND);
-				gl.blendFunc(gl.ONE, gl.ONE);
-				break;
-			case BlendMode.Multiply:
-				gl.enable(gl.BLEND);
-				gl.blendFunc(gl.DST_COLOR, gl.ZERO);
-				break;
-			default:
-				throw new Error("unknown blendmode:" + mode);
-		}
+	drawTex(tex: GLTexture, x: number = 0.0, y: number = 0.0): void {
+		const w = tex.width;
+		const h = tex.height;
+		const c = this.currentColor;
+		this.drawTriangleTextured(
+			tex,
+			x, y, ...c, 0.0, 1.0,  // Bottom left (flipped v)
+			x + w, y, ...c, 1.0, 1.0,   // Bottom right
+			x, y + h, ...c, 0.0, 0.0    // Top left
+		);
+		this.drawTriangleTextured(
+			tex,
+			x + w, y, ...c, 1.0, 1.0,   // Bottom right
+			x + w, y + h, ...c, 1.0, 0.0,    // Top right
+			x, y + h, ...c, 0.0, 0.0    // Top left
+		);
 	}
 
+
+	// private methods
 	private bindTexture(tex: GLTexture): void {
 		this.gl.activeTexture(this.gl.TEXTURE0);
 		this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
