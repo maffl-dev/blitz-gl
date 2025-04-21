@@ -5,6 +5,7 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+	"types": ["node"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -18,7 +19,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+	"baseUrl": ".", 
+  	"paths": {
+		"/*": ["src/*"]  // This allows absolute imports from the root directory
+	}
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }

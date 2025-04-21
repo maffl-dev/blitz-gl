@@ -1,6 +1,6 @@
-import { semiGreen, white } from "../colors";
-import { GLTexture, Renderer } from "../renderer";
-import { Scene } from "../scene";
+import { semiGreen, white } from "@/engine/colors";
+import { GLTexture, Renderer } from "@/engine/renderer";
+import { Scene } from "@/engine/scene";
 
 class TestScene extends Scene {
 	x: number = 0.0

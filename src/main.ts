@@ -1,5 +1,5 @@
-import { Engine } from "./engine"
-import { WebGLRenderer } from "./renderer"
+import { Engine } from "./engine/engine"
+import { WebGLRenderer } from "./engine/renderer"
 import { TestScene } from "./scenes/test"
 
 const TILESIZE: number = 20
