@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+	"baseUrl": ".", 
+  	"paths": {
+		"@/*": ["./src/*"]
+	},
+
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -20,11 +25,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-
-	"baseUrl": ".", 
-  	"paths": {
-		"/*": ["src/*"]  // This allows absolute imports from the root directory
-	}
   },
   "include": ["src"],
   "exclude": ["node_modules"]

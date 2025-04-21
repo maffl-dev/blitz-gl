@@ -10,7 +10,7 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			'@': resolve(__dirname, 'src'),  // Use 'src' as the base directory for '@' alias
+			'@': resolve(__dirname, './src')
 		},
 	},
 });
