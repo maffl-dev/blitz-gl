@@ -97,6 +97,7 @@ export class WebGLRenderer implements Renderer {
 	private startRenderTime: number = 0.0;
 	private extTimerQuery: any;
 	private gpuQuery: WebGLQuery | null = null;
+	private lastGpuQuery: WebGLQuery | null = null;
 	private gpuTimePending: boolean = false;
 
 	constructor(canvas: HTMLCanvasElement) {
@@ -169,7 +170,20 @@ export class WebGLRenderer implements Renderer {
 		this.metrics.drawCalls = 0;
 		this.metrics.triangleCount = 0;
 		this.startRenderTime = performance.now();
-		if (ext && !this.gpuQuery) {
+
+		// Check if we can read results from previous query
+		if (this.gpuTimePending && ext && this.lastGpuQuery) {
+			if (gl.getQueryParameter(this.lastGpuQuery, gl.QUERY_RESULT_AVAILABLE)) {
+				const gpuTime = gl.getQueryParameter(this.lastGpuQuery, gl.QUERY_RESULT);
+				this.metrics.gpuFrameTime = gpuTime / 1000000.0; // Convert nanoseconds to milliseconds
+				this.gpuTimePending = false;
+				gl.deleteQuery(this.lastGpuQuery);
+				this.lastGpuQuery = null;
+			}
+		}
+
+		// Start new GPU timer query for this frame
+		if (ext) {
 			this.gpuQuery = gl.createQuery();
 			gl.beginQuery(ext.TIME_ELAPSED_EXT, this.gpuQuery);
 		}
@@ -217,26 +231,15 @@ export class WebGLRenderer implements Renderer {
 
 		this.metrics.cpuFrameTime = performance.now() - this.startRenderTime;
 
-		// End GPU query
+		// End GPU query and set it as pending
 		if (ext && this.gpuQuery) {
 			gl.endQuery(ext.TIME_ELAPSED_EXT);
-			this.gpuTimePending = true; // Mark GPU query as pending
+			this.lastGpuQuery = this.gpuQuery; // Store reference to current query for reading later
+			this.gpuQuery = null;
+			this.gpuTimePending = true;
 		}
 
-		// Check if GPU query result is available in the next frame
-		if (this.gpuTimePending && ext && this.gpuQuery) {
-			if (gl.getQueryParameter(this.gpuQuery, gl.QUERY_RESULT_AVAILABLE)) {
-				const gpuTime = gl.getQueryParameter(this.gpuQuery, gl.QUERY_RESULT);
-				this.metrics.gpuFrameTime = gpuTime / 1000000.0; // Convert nanoseconds to milliseconds
-				this.gpuTimePending = false;
-				this.gpuQuery = null;
-			}
-		}
-
-		console.log("draw calls", this.metrics.drawCalls);
-		console.log("tris", this.metrics.triangleCount);
-		console.log("cpu", this.metrics.cpuFrameTime);
-		console.log("gpu", this.metrics.gpuFrameTime);
+		// console.log(this.metrics);
 	}
 
 	// low level draw funcs
