@@ -7,4 +7,3 @@
 - texRect()
 - rect()
 - SetShader()
-- dev: record number of drawcalls (flush, begin endframe)

@@ -41,6 +41,9 @@ export interface Renderer {
 	loadTex(url: string): GLTexture
 	drawTex(tex: GLTexture, x: number, y: number): void
 
+	// other
+	getMetrics(): Readonly<RenderMetrics>
+
 }
 
 export interface GLTexture extends WebGLTexture {
@@ -55,12 +58,18 @@ export enum BlendMode {
 	Multiply,
 }
 
+export interface RenderMetrics {
+	cpuFrameTime: number
+	gpuFrameTime: number
+	drawCalls: number
+	triangleCount: number
+}
+
 export class WebGLRenderer implements Renderer {
 	private canvas: HTMLCanvasElement;
 	private viewportWidth!: number;
 	private viewportHeight!: number;
 	private gl: WebGL2RenderingContext;
-	private numberOfDrawCalls: number = 0;
 
 	private readonly MAX_TRIANGLES = 1024;
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
@@ -77,6 +86,18 @@ export class WebGLRenderer implements Renderer {
 	private currentTexture: WebGLTexture | null = null;
 	private currentColor: Color = [...white];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
+
+	// metrics
+	private metrics: RenderMetrics = {
+		cpuFrameTime: 0,
+		gpuFrameTime: 0,
+		drawCalls: 0,
+		triangleCount: 0
+	}
+	private startRenderTime: number = 0.0;
+	private extTimerQuery: any;
+	private gpuQuery: WebGLQuery | null = null;
+	private gpuTimePending: boolean = false;
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
@@ -133,10 +154,26 @@ export class WebGLRenderer implements Renderer {
 		// resolution info
 		this.resolutionLoc = gl.getUniformLocation(this.program, "u_resolution")!
 		if (!this.resolutionLoc) throw new Error("u_resolution uniform not found in vs shader");
+
+		this.extTimerQuery = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+		if (!this.extTimerQuery) {
+			console.warn("gpuFrameTime will not be measured. Browser does not support EXT_disjoint_timer_query_webgl2")
+		}
 	}
 
 	beginFrame(): void {
 		const gl = this.gl;
+		const ext = this.extTimerQuery;
+
+		// Start metric timers
+		this.metrics.drawCalls = 0;
+		this.metrics.triangleCount = 0;
+		this.startRenderTime = performance.now();
+		if (ext && !this.gpuQuery) {
+			this.gpuQuery = gl.createQuery();
+			gl.beginQuery(ext.TIME_ELAPSED_EXT, this.gpuQuery);
+		}
+
 		gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 		gl.clearColor(...black);
 		gl.clear(gl.COLOR_BUFFER_BIT);
@@ -144,7 +181,6 @@ export class WebGLRenderer implements Renderer {
 		this.textureEnabled = false;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
-		this.numberOfDrawCalls = 0;
 	}
 
 	flush(): void {
@@ -165,15 +201,42 @@ export class WebGLRenderer implements Renderer {
 
 		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
-		this.numberOfDrawCalls++;
+
+		this.metrics.drawCalls++;
+		this.metrics.triangleCount += this.vertexCount / 3;
 
 		this.vertexCount = 0;
 		this.textureEnabled = false;
 	}
 
 	endFrame(): void {
+		const gl = this.gl;
+		const ext = this.extTimerQuery;
+
 		this.flush();
-		console.log(`Draw calls: ${this.numberOfDrawCalls}`);
+
+		this.metrics.cpuFrameTime = performance.now() - this.startRenderTime;
+
+		// End GPU query
+		if (ext && this.gpuQuery) {
+			gl.endQuery(ext.TIME_ELAPSED_EXT);
+			this.gpuTimePending = true; // Mark GPU query as pending
+		}
+
+		// Check if GPU query result is available in the next frame
+		if (this.gpuTimePending && ext && this.gpuQuery) {
+			if (gl.getQueryParameter(this.gpuQuery, gl.QUERY_RESULT_AVAILABLE)) {
+				const gpuTime = gl.getQueryParameter(this.gpuQuery, gl.QUERY_RESULT);
+				this.metrics.gpuFrameTime = gpuTime / 1000000.0; // Convert nanoseconds to milliseconds
+				this.gpuTimePending = false;
+				this.gpuQuery = null;
+			}
+		}
+
+		console.log("draw calls", this.metrics.drawCalls);
+		console.log("tris", this.metrics.triangleCount);
+		console.log("cpu", this.metrics.cpuFrameTime);
+		console.log("gpu", this.metrics.gpuFrameTime);
 	}
 
 	// low level draw funcs
@@ -353,6 +416,11 @@ export class WebGLRenderer implements Renderer {
 		);
 	}
 
+
+	// other
+	getMetrics(): Readonly<RenderMetrics> {
+		return this.metrics;
+	}
 
 	// private methods
 	private bindTexture(tex: GLTexture): void {
