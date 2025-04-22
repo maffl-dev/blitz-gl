@@ -30,7 +30,7 @@ export class Engine {
 		this.renderer.beginFrame()
 		assert(this.activeScene, "Engine.render: no active scene!")
 		this.activeScene.render(this.renderer)
-		this.renderer.flush()
+		this.renderer.endFrame()
 	}
 
 	changeScene(newScene: Scene) {

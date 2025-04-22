@@ -1,5 +1,5 @@
 import { semiGreen, white } from "@/engine/colors";
-import { GLTexture, Renderer } from "@/engine/renderer";
+import { BlendMode, GLTexture, Renderer } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 
 class TestScene extends Scene {
@@ -47,7 +47,9 @@ class TestScene extends Scene {
 		r.setColor(1.0, 0.2, 0.2)
 		r.drawTex(this.myTexture, 52, 52)
 		r.setColor(...semiGreen)
+		r.setBlendmode(BlendMode.Additive)
 		r.drawTex(this.myTexture, 182, 52)
+		r.setBlendmode(BlendMode.Alpha)
 	}
 }
 

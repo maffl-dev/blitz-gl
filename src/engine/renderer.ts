@@ -1,14 +1,10 @@
 import { black, Color, white } from "./colors";
 
-export interface GLTexture extends WebGLTexture {
-	width: number;
-	height: number;
-}
-
 export interface Renderer {
 	// low level basics
 	beginFrame(): void
 	flush(): void
+	endFrame(): void
 
 	// low level drawing funcs
 	drawTriangle(
@@ -47,7 +43,12 @@ export interface Renderer {
 
 }
 
-enum BlendMode {
+export interface GLTexture extends WebGLTexture {
+	width: number;
+	height: number;
+}
+
+export enum BlendMode {
 	Opaque,
 	Alpha,
 	Additive,
@@ -59,6 +60,7 @@ export class WebGLRenderer implements Renderer {
 	private viewportWidth!: number;
 	private viewportHeight!: number;
 	private gl: WebGL2RenderingContext;
+	private numberOfDrawCalls: number = 0;
 
 	private readonly MAX_TRIANGLES = 1024;
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
@@ -70,8 +72,11 @@ export class WebGLRenderer implements Renderer {
 	private useTextureLoc!: WebGLUniformLocation | null;
 	private textureEnabled: boolean = false;
 	private resolutionLoc!: WebGLUniformLocation | null;
+
+	// state
 	private currentTexture: WebGLTexture | null = null;
 	private currentColor: Color = [...white];
+	private currentBlendMode: BlendMode = BlendMode.Opaque;
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2");
@@ -139,10 +144,13 @@ export class WebGLRenderer implements Renderer {
 		this.textureEnabled = false;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
+		this.numberOfDrawCalls = 0;
 	}
 
 	flush(): void {
 		const gl = this.gl;
+
+		if (this.vertexCount === 0) return;
 
 		if (this.textureEnabled && this.currentTexture) {
 			gl.activeTexture(gl.TEXTURE0);
@@ -157,9 +165,15 @@ export class WebGLRenderer implements Renderer {
 
 		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
+		this.numberOfDrawCalls++;
 
 		this.vertexCount = 0;
 		this.textureEnabled = false;
+	}
+
+	endFrame(): void {
+		this.flush();
+		console.log(`Draw calls: ${this.numberOfDrawCalls}`);
 	}
 
 	// low level draw funcs
@@ -243,6 +257,11 @@ export class WebGLRenderer implements Renderer {
 
 	// color
 	setBlendmode(mode: BlendMode): void {
+		if (mode === this.currentBlendMode) return;
+
+		this.flush();
+		this.currentBlendMode = mode;
+
 		const gl = this.gl;
 		switch (mode) {
 			case BlendMode.Opaque:
