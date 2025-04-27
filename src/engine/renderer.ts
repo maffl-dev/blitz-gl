@@ -1,4 +1,5 @@
 import { black, Color, white } from "./colors";
+import { clamp } from "./utils";
 
 export interface Renderer {
 	// low level basics
@@ -40,6 +41,7 @@ export interface Renderer {
 	// textures
 	loadTex(url: string): GLTexture
 	drawTex(tex: GLTexture, x: number, y: number): void
+	drawTexRect(tex: GLTexture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
 	// other
 	getMetrics(): Readonly<RenderMetrics>
@@ -416,6 +418,33 @@ export class WebGLRenderer implements Renderer {
 			x + w, y, ...c, 1.0, 1.0,   // Bottom right
 			x + w, y + h, ...c, 1.0, 0.0,    // Top right
 			x, y + h, ...c, 0.0, 0.0    // Top left
+		);
+	}
+
+	drawTexRect(tex: GLTexture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void {
+		const w = tex.width;
+		const h = tex.height;
+		sourceX = clamp(sourceX, 0, w)
+		sourceY = clamp(sourceY, 0, h)
+		sourceWidth = clamp(sourceWidth, 0, w - sourceX)
+		sourceHeight = clamp(sourceHeight, 0, h - sourceY)
+
+		if (sourceWidth === 0 || sourceHeight === 0) {
+			return
+		}
+
+		const u1 = sourceX / w;
+		const v1 = 1 - sourceY / h;
+		const u2 = (sourceX + sourceWidth) / w;
+		const v2 = 1 - (sourceY + sourceHeight) / h;
+
+		const c = this.currentColor;
+		this.drawQuadTextured(
+			tex,
+			x, y, ...c, u1, v1,
+			x + sourceWidth, y, ...c, u2, v1,
+			x + sourceWidth, y + sourceHeight, ...c, u2, v2,
+			x, y + sourceHeight, ...c, u1, v2
 		);
 	}
 

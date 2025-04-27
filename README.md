@@ -1,2 +1,1 @@
-A simple game engine for the web.
-Using WebGL and Typescript.
+A simple BlitzBasic inspired game engine for the web. Using WebGL and Typescript.

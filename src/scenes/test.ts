@@ -16,6 +16,11 @@ class TestScene extends Scene {
 	}
 
 	render(r: Renderer): void {
+		// this.drawBasic(r)
+		this.drawTextures(r)
+	}
+
+	drawBasic(r: Renderer): void {
 		// low level: triangles and quads
 		for (let i = 0; i < 100; i++) {
 			const x = (i % 10) * 34;  // 10 columns of 34px each
@@ -41,8 +46,9 @@ class TestScene extends Scene {
 			300, 100, ...white, 1, 0,   // Bottom right
 			200, 100, ...white, 0, 0,   // Bottom left
 		)
+	}
 
-		// textures & colors
+	drawTextures(r: Renderer): void {
 		r.setAlpha(0.7)
 		r.setColor(1.0, 0.2, 0.2)
 		r.drawTex(this.myTexture, 52, 52)
@@ -50,7 +56,10 @@ class TestScene extends Scene {
 		r.setBlendmode(BlendMode.Additive)
 		r.drawTex(this.myTexture, 182, 52)
 		r.setBlendmode(BlendMode.Alpha)
+		r.setColor(...white)
+		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 100)
 	}
 }
+
 
 export { TestScene }

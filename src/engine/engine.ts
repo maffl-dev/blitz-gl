@@ -1,3 +1,4 @@
+import { assert } from "./utils"
 import { Renderer } from "./renderer"
 import { Scene } from "./scene"
 
@@ -39,11 +40,5 @@ export class Engine {
 		}
 		this.activeScene = newScene
 		newScene.init(this.renderer)
-	}
-}
-
-function assert(condition: any, message: string = "Assertion failed"): asserts condition {
-	if (!condition) {
-		throw new Error(message)
 	}
 }
