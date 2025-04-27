@@ -17,7 +17,8 @@ class TestScene extends Scene {
 
 	render(r: Renderer): void {
 		// this.drawBasic(r)
-		this.drawTextures(r)
+		this.drawShapes(r)
+		// this.drawTextures(r)
 	}
 
 	drawBasic(r: Renderer): void {
@@ -46,6 +47,17 @@ class TestScene extends Scene {
 			300, 100, ...white, 1, 0,   // Bottom right
 			200, 100, ...white, 0, 0,   // Bottom left
 		)
+	}
+
+	drawShapes(r: Renderer): void {
+		r.setBlendmode(BlendMode.Alpha)
+		r.setColor(...white)
+		r.drawPoint(10, 30)
+		r.drawTri(20, 10, 30, 30, 40, 10)
+		r.setColor(0.5, 0.5, 1.0)
+		r.drawRect(60, 20, 100, 30)
+		r.setColor(1.0, 0.5, 0.5)
+		r.drawCircle(50, 90, 25)
 	}
 
 	drawTextures(r: Renderer): void {

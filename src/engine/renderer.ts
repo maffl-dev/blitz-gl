@@ -38,6 +38,12 @@ export interface Renderer {
 	setColor(r: number, g: number, b: number, a?: number): void
 	setAlpha(a: number): void;
 
+	// shapes
+	drawPoint(x: number, y: number): void
+	drawTri(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): void
+	drawCircle(x: number, y: number, radius: number, segments?: number): void
+	drawRect(x: number, y: number, w: number, h: number): void
+
 	// textures
 	loadTex(url: string): GLTexture
 	drawTex(tex: GLTexture, x: number, y: number): void
@@ -103,7 +109,7 @@ export class WebGLRenderer implements Renderer {
 	private gpuTimePending: boolean = false;
 
 	constructor(canvas: HTMLCanvasElement) {
-		const gl = canvas.getContext("webgl2");
+		const gl = canvas.getContext("webgl2", { antialias: false });
 		if (!gl) throw new Error("WebGL2 not supported");
 		this.gl = gl;
 		this.canvas = canvas;
@@ -361,6 +367,54 @@ export class WebGLRenderer implements Renderer {
 
 	setAlpha(a: number): void {
 		this.currentColor[3] = a
+	}
+
+	// shapes
+	drawPoint(x: number, y: number): void {
+		this.drawRect(x, y, 1, 1)
+	}
+
+	drawTri(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): void {
+		const c = this.currentColor;
+		this.drawTriangle(
+			x1, y1, ...c,
+			x2, y2, ...c,
+			x3, y3, ...c
+		);
+	}
+
+	drawCircle(cx: number, cy: number, radius: number, segments: number = 32): void {
+		segments = Math.max(3, segments);
+		const angleStep = (Math.PI * 2) / segments;
+		let prevX = cx + Math.cos(0) * radius;
+		let prevY = cy + Math.sin(0) * radius;
+
+		for (let i = 1; i <= segments; i++) {
+			const angle = i * angleStep;
+			const nextX = cx + Math.cos(angle) * radius;
+			const nextY = cy + Math.sin(angle) * radius;
+			this.drawTri(
+				cx, cy,
+				prevX, prevY,
+				nextX, nextY
+			);
+			prevX = nextX;
+			prevY = nextY;
+		}
+	}
+
+	drawRect(x: number, y: number, w: number, h: number): void {
+		const c = this.currentColor;
+		this.drawTriangle(
+			x, y, ...c,
+			x + w, y, ...c,
+			x, y + h, ...c,
+		);
+		this.drawTriangle(
+			x + w, y, ...c,
+			x + w, y + h, ...c,
+			x, y + h, ...c
+		);
 	}
 
 	// textures
