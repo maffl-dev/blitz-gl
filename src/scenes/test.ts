@@ -17,8 +17,9 @@ class TestScene extends Scene {
 
 	render(r: Renderer): void {
 		// this.drawBasic(r)
-		this.drawShapes(r)
+		// this.drawShapes(r)
 		// this.drawTextures(r)
+		this.drawTranslated(r)
 	}
 
 	drawBasic(r: Renderer): void {
@@ -70,6 +71,16 @@ class TestScene extends Scene {
 		r.setBlendmode(BlendMode.Alpha)
 		r.setColor(...white)
 		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 100)
+	}
+
+	drawTranslated(r: Renderer): void {
+		r.setColor(...semiGreen)
+		r.translate(50, 50)
+		r.scale(1.5, 1.5)
+		r.translate(50, 25)
+		r.rotate(Math.PI / 2)
+		r.translate(-50, -25)
+		r.drawRect(0, 0, 100, 50)
 	}
 }
 

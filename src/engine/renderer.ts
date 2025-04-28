@@ -49,6 +49,12 @@ export interface Renderer {
 	drawTex(tex: GLTexture, x: number, y: number): void
 	drawTexRect(tex: GLTexture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
+	// transform
+	translate(x: number, y: number): void
+	rotate(angle: number): void
+	scale(sx: number, sy: number): void
+	applyTransform(ix: number, iy: number, jx: number, jy: number, tx: number, ty: number): void
+
 	// other
 	getMetrics(): Readonly<RenderMetrics>
 
@@ -73,6 +79,12 @@ export interface RenderMetrics {
 	triangleCount: number
 }
 
+interface RenderTransform {
+	ix: number, iy: number,
+	jx: number, jy: number
+	tx: number, ty: number
+}
+
 export class WebGLRenderer implements Renderer {
 	private canvas: HTMLCanvasElement;
 	private viewportWidth!: number;
@@ -94,6 +106,11 @@ export class WebGLRenderer implements Renderer {
 	private currentTexture: WebGLTexture | null = null;
 	private currentColor: Color = [...white];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
+	private currentTransform: RenderTransform = {
+		ix: 1, iy: 0,
+		jx: 0, jy: 1,
+		tx: 0, ty: 0
+	};
 
 	// metrics
 	private metrics: RenderMetrics = {
@@ -203,6 +220,7 @@ export class WebGLRenderer implements Renderer {
 		this.textureEnabled = false;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
+		this.replaceTransform(1, 0, 0, 1, 0, 0);
 	}
 
 	flush(): void {
@@ -250,20 +268,27 @@ export class WebGLRenderer implements Renderer {
 		// console.log(this.metrics);
 	}
 
-	// low level draw funcs
+	// low level draw funcs (unaffected by setColor())
 	drawTriangle(
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
 	): void {
+		const t = this.currentTransform;
+		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
+		const ty1 = x1 * t.iy + y1 * t.jy + t.ty;
+		const tx2 = x2 * t.ix + y2 * t.jx + t.tx;
+		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
+		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
+		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
 		if (this.textureEnabled) {
 			this.flush();
 			this.textureEnabled = false;
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
-		this.vertexData.set([x1, y1, r1, g1, b1, a1, 0.0, 0.0], base);
-		this.vertexData.set([x2, y2, r2, g2, b2, a2, 0.0, 0.0], base + this.VERTEX_SIZE);
-		this.vertexData.set([x3, y3, r3, g3, b3, a3, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
+		this.vertexData.set([tx1, ty1, r1, g1, b1, a1, 0.0, 0.0], base);
+		this.vertexData.set([tx2, ty2, r2, g2, b2, a2, 0.0, 0.0], base + this.VERTEX_SIZE);
+		this.vertexData.set([tx3, ty3, r3, g3, b3, a3, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
 		this.vertexCount += 3;
 	}
 
@@ -273,6 +298,13 @@ export class WebGLRenderer implements Renderer {
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
 	): void {
+		const t = this.currentTransform;
+		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
+		const ty1 = x1 * t.iy + y1 * t.jy + t.ty;
+		const tx2 = x2 * t.ix + y2 * t.jx + t.tx;
+		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
+		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
+		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
 		if (!this.textureEnabled || this.currentTexture !== tex) {
 			this.flush();
 			this.textureEnabled = true;
@@ -281,9 +313,9 @@ export class WebGLRenderer implements Renderer {
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([
-			x1, y1, r1, g1, b1, a1, u1, v1,
-			x2, y2, r2, g2, b2, a2, u2, v2,
-			x3, y3, r3, g3, b3, a3, u3, v3
+			tx1, ty1, r1, g1, b1, a1, u1, v1,
+			tx2, ty2, r2, g2, b2, a2, u2, v2,
+			tx3, ty3, r3, g3, b3, a3, u3, v3
 		], base);
 		this.vertexCount += 3;
 	}
@@ -502,6 +534,38 @@ export class WebGLRenderer implements Renderer {
 		);
 	}
 
+	// transforms
+	translate(x: number, y: number): void {
+		this.applyTransform(1, 0, 0, 1, x, y);
+	}
+
+	scale(sx: number, sy: number): void {
+		this.applyTransform(sx, 0, 0, sy, 0, 0);
+	}
+
+	rotate(angle: number): void {
+		this.applyTransform(Math.cos(angle), -Math.sin(angle), Math.sin(angle), Math.cos(angle), 0, 0);
+	}
+
+	applyTransform(ix: number, iy: number, jx: number, jy: number, tx: number, ty: number): void {
+		const t = this.currentTransform;
+		const ix2 = ix * t.ix + iy * t.jx;
+		const iy2 = ix * t.iy + iy * t.jy;
+		const jx2 = jx * t.ix + jy * t.jx;
+		const jy2 = jx * t.iy + jy * t.jy;
+		const tx2 = tx * t.ix + ty * t.jx + t.tx;
+		const ty2 = tx * t.iy + ty * t.jy + t.ty;
+		this.replaceTransform(ix2, iy2, jx2, jy2, tx2, ty2);
+	}
+
+	private replaceTransform(ix: number, iy: number, jx: number, jy: number, tx: number, ty: number): void {
+		this.currentTransform.ix = ix;
+		this.currentTransform.iy = iy
+		this.currentTransform.jx = jx;
+		this.currentTransform.jy = jy;
+		this.currentTransform.tx = tx;
+		this.currentTransform.ty = ty;
+	}
 
 	// other
 	getMetrics(): Readonly<RenderMetrics> {
