@@ -213,7 +213,7 @@ export class WebGLRenderer implements Renderer {
 			gl.beginQuery(ext.TIME_ELAPSED_EXT, this.gpuQuery);
 		}
 
-		gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+		gl.viewport(0, 0, this.viewportWidth, this.viewportHeight);
 		gl.clearColor(...black);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 		this.vertexCount = 0;
