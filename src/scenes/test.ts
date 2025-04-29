@@ -75,12 +75,23 @@ class TestScene extends Scene {
 
 	drawTranslated(r: Renderer): void {
 		r.setColor(...semiGreen)
-		r.translate(50, 50)
-		r.scale(1.5, 1.5)
-		r.translate(50, 25)
-		r.rotate(Math.PI / 2)
-		r.translate(-50, -25)
-		r.drawRect(0, 0, 100, 50)
+		r.push()
+		{
+			r.translate(50, 50)
+			r.scale(1.5, 1.5)
+			r.translate(50, 25)
+			r.rotate(Math.PI / 2)
+			r.translate(-50, -25)
+			r.drawRect(0, 0, 100, 50)
+		}
+		r.pop()
+		r.push()
+		{
+			r.setColor(...white)
+			r.translate(10, 10)
+			r.drawRect(0, 0, 10, 10)
+		}
+		r.pop()
 	}
 }
 

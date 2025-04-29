@@ -1,5 +1,5 @@
 import { black, Color, white } from "./colors";
-import { clamp } from "./utils";
+import { assert, clamp } from "./utils";
 
 export interface Renderer {
 	// low level basics
@@ -54,6 +54,8 @@ export interface Renderer {
 	rotate(angle: number): void
 	scale(sx: number, sy: number): void
 	applyTransform(ix: number, iy: number, jx: number, jy: number, tx: number, ty: number): void
+	push(): void
+	pop(): void
 
 	// other
 	getMetrics(): Readonly<RenderMetrics>
@@ -93,6 +95,7 @@ export class WebGLRenderer implements Renderer {
 
 	private readonly MAX_TRIANGLES = 1024;
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
+	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
 
 	private program!: WebGLProgram;
 	private vertexBuffer!: WebGLBuffer;
@@ -111,6 +114,7 @@ export class WebGLRenderer implements Renderer {
 		jx: 0, jy: 1,
 		tx: 0, ty: 0
 	};
+	private transformStack: Array<RenderTransform> = []
 
 	// metrics
 	private metrics: RenderMetrics = {
@@ -221,6 +225,7 @@ export class WebGLRenderer implements Renderer {
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
 		this.replaceTransform(1, 0, 0, 1, 0, 0);
+		this.transformStack.length = 0;
 	}
 
 	flush(): void {
@@ -565,6 +570,20 @@ export class WebGLRenderer implements Renderer {
 		this.currentTransform.jy = jy;
 		this.currentTransform.tx = tx;
 		this.currentTransform.ty = ty;
+	}
+
+	push(): void {
+		const stack = this.transformStack;
+		assert(stack.length < this.MAX_TRANSFORM_STACK_DEPTH, "Renderer: maxiumum push/pop depth reached. Check if you have mismatching push/pop operations.")
+		stack.push({ ...this.currentTransform })
+	}
+
+	pop(): void {
+		const stack = this.transformStack;
+		const t = stack.pop();
+		if (t) {
+			this.currentTransform = t;
+		}
 	}
 
 	// other
