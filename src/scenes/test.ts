@@ -18,9 +18,9 @@ class TestScene extends Scene {
 	render(r: Renderer): void {
 		// this.drawBasic(r)
 		// this.drawShapes(r)
-		// this.drawTextures(r)
+		this.drawTextures(r)
 		// this.drawTranslated(r)
-		this.drawRenderToTexture(r)
+		// this.drawRenderToTexture(r)
 	}
 
 	drawBasic(r: Renderer): void {

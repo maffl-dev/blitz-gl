@@ -1,5 +1,5 @@
 import { black, Color, white } from "./colors";
-import { assert, clamp } from "./utils";
+import { assert, clamp, panic } from "./utils";
 
 export interface Renderer {
 	// low level basics
@@ -89,6 +89,66 @@ export class Texture {
 	}
 }
 
+
+export class Shader {
+	private gl: WebGL2RenderingContext
+	private program: WebGLProgram
+	private uniformLocations: Map<string, WebGLUniformLocation> = new Map();
+
+	constructor(gl: WebGL2RenderingContext, program: WebGLProgram) {
+		this.gl = gl;
+		this.program = program;
+	}
+
+	use(): void {
+		this.gl.useProgram(this.program)
+	}
+
+	setUniform(name: string, value: number | number[] | Texture): void {
+		const location = this.getUniformLocation(name);
+		if (location === null) return;
+
+		if (typeof value === "number") {
+			this.gl.uniform1f(location, value);
+		}
+		else if (Array.isArray(value)) {
+			switch (value.length) {
+				case 2: this.gl.uniform2fv(location, value); break;
+				case 3: this.gl.uniform3fv(location, value); break;
+				case 4: this.gl.uniform4fv(location, value); break;
+				case 9: this.gl.uniformMatrix3fv(location, false, value); break;
+				case 16: this.gl.uniformMatrix4fv(location, false, value); break;
+				default: panic(`Unsupported uniform array length: ${value.length}`);
+			}
+		}
+
+		else if (value instanceof Texture) {
+			const unit = 0;
+			value.bind(unit);
+			this.gl.uniform1i(location, unit); // texture unit
+		}
+	}
+
+	delete(): void {
+		this.gl.deleteProgram(this.program);
+	}
+
+	getAttribLocation(name: string): number {
+		const loc = this.gl.getAttribLocation(this.program, name);
+		if (loc === -1) throw new Error(`Attribute ${name} not found`);
+		return loc;
+	}
+
+	getUniformLocation(name: string): WebGLUniformLocation | null {
+		if (this.uniformLocations.has(name)) {
+			return this.uniformLocations.get(name)!;
+		}
+		const loc = this.gl.getUniformLocation(this.program, name);
+		if (loc !== null) this.uniformLocations.set(name, loc);
+		return loc;
+	}
+}
+
 export interface RenderMetrics {
 	cpuFrameTime: number
 	gpuFrameTime: number
@@ -112,15 +172,14 @@ export class WebGLRenderer implements Renderer {
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
 	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
 
-	private program!: WebGLProgram;
+	private defaultShader!: Shader;
 	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
 	private vertexCount = 0;
-	private useTextureLoc!: WebGLUniformLocation | null;
 	private textureEnabled: boolean = false;
-	private resolutionLoc!: WebGLUniformLocation | null;
 
 	// state
+	private currentShader!: Shader;
 	private currentTexture: Texture | null = null;
 	private currentColor: Color = [...white];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
@@ -159,10 +218,10 @@ export class WebGLRenderer implements Renderer {
 
 		const vsSource = loadShader('/shaders/default.vs');
 		const fsSource = loadShader('/shaders/default.fs');
-
-		// Link program
-		this.program = createProgram(gl, vsSource, fsSource);
-		gl.useProgram(this.program);
+		const program = createProgram(gl, vsSource, fsSource);
+		this.defaultShader = new Shader(gl, program);
+		this.currentShader = this.defaultShader;
+		this.currentShader.use();
 
 		// Create and setup position buffer
 		this.vertexBuffer = gl.createBuffer()!;
@@ -172,33 +231,22 @@ export class WebGLRenderer implements Renderer {
 		const stride = this.VERTEX_SIZE * Float32Array.BYTES_PER_ELEMENT;
 
 		// Position attribute
-		const positionLoc = gl.getAttribLocation(this.program, "a_position");
-		if (positionLoc === -1) throw new Error("a_position not found in shader");
+		const positionLoc = this.currentShader.getAttribLocation("a_position");
 		gl.enableVertexAttribArray(positionLoc);
 		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
 
 		// Color attribute
-		const colorLoc = gl.getAttribLocation(this.program, "a_color");
-		if (colorLoc === -1) throw new Error("a_color not found in shader");
+		const colorLoc = this.currentShader.getAttribLocation("a_color");
 		gl.enableVertexAttribArray(colorLoc);
 		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
 
 		// UV attribute
-		const uvLoc = gl.getAttribLocation(this.program, "a_uv");
-		if (uvLoc === -1) throw new Error("a_uv not found in shader");
+		const uvLoc = this.currentShader.getAttribLocation("a_uv");
 		gl.enableVertexAttribArray(uvLoc);
 		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
 
-		// Store uniform location for runtime toggle (optional)
-		this.useTextureLoc = gl.getUniformLocation(this.program, "u_useTexture");
-		if (!this.useTextureLoc) throw new Error("u_useTexture uniform not found in shader");
-
 		// Default to not using textures initially
-		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
-
-		// resolution info
-		this.resolutionLoc = gl.getUniformLocation(this.program, "u_resolution")!
-		if (!this.resolutionLoc) throw new Error("u_resolution uniform not found in vs shader");
+		this.currentShader.setUniform("u_useTexture", this.textureEnabled ? 1 : 0)
 
 		this.extTimerQuery = gl.getExtension("EXT_disjoint_timer_query_webgl2");
 		if (!this.extTimerQuery) {
@@ -258,7 +306,7 @@ export class WebGLRenderer implements Renderer {
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * this.VERTEX_SIZE));
 
-		gl.uniform1i(this.useTextureLoc, this.textureEnabled ? 1 : 0);
+		this.currentShader.setUniform("u_useTexture", this.textureEnabled ? 1 : 0)
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
 
 		this.metrics.drawCalls++;
@@ -603,11 +651,12 @@ export class WebGLRenderer implements Renderer {
 	// private methods
 	private setViewportSize(width: number, height: number): void {
 		const gl = this.gl;
+		const shader = this.currentShader;
 		this.viewportWidth = width;
 		this.viewportHeight = height;
 		gl.viewport(0, 0, width, height);
-		gl.useProgram(this.program);
-		gl.uniform2f(this.resolutionLoc, width, height);
+		shader.use()
+		shader.setUniform("u_resolution", [width, height])
 	}
 
 }
