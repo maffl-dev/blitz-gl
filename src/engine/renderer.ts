@@ -14,7 +14,7 @@ export interface Renderer {
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
 	): void
 	drawTriangleTextured(
-		tex: WebGLTexture,
+		tex: Texture,
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
@@ -26,7 +26,7 @@ export interface Renderer {
 		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number
 	): void
 	drawQuadTextured(
-		tex: WebGLTexture,
+		tex: Texture,
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number,
@@ -45,9 +45,9 @@ export interface Renderer {
 	drawRect(x: number, y: number, w: number, h: number): void
 
 	// textures
-	loadTex(url: string): GLTexture
-	drawTex(tex: GLTexture, x: number, y: number): void
-	drawTexRect(tex: GLTexture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+	loadTex(url: string): Texture
+	drawTex(tex: Texture, x: number, y: number): void
+	drawTexRect(tex: Texture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
 	// transform
 	translate(x: number, y: number): void
@@ -62,16 +62,31 @@ export interface Renderer {
 
 }
 
-export interface GLTexture extends WebGLTexture {
-	width: number;
-	height: number;
-}
-
 export enum BlendMode {
 	Opaque,
 	Alpha,
 	Additive,
 	Multiply,
+}
+
+export class Texture {
+	gl: WebGL2RenderingContext
+	data: WebGLTexture
+	width: number = 0
+	height: number = 0
+
+	constructor(gl: WebGL2RenderingContext) {
+		this.gl = gl
+		this.data = gl.createTexture()
+		if (!this.data) {
+			throw new Error("Failed to create Texture");
+		}
+	}
+
+	bind(unit: number = 0): void {
+		this.gl.activeTexture(this.gl.TEXTURE0 + unit);
+		this.gl.bindTexture(this.gl.TEXTURE_2D, this.data);
+	}
 }
 
 export interface RenderMetrics {
@@ -106,7 +121,7 @@ export class WebGLRenderer implements Renderer {
 	private resolutionLoc!: WebGLUniformLocation | null;
 
 	// state
-	private currentTexture: WebGLTexture | null = null;
+	private currentTexture: Texture | null = null;
 	private currentColor: Color = [...white];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
 	private currentTransform: RenderTransform = {
@@ -234,8 +249,7 @@ export class WebGLRenderer implements Renderer {
 		if (this.vertexCount === 0) return;
 
 		if (this.textureEnabled && this.currentTexture) {
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, this.currentTexture);
+			this.currentTexture.bind();
 		} else {
 			gl.bindTexture(gl.TEXTURE_2D, null); // Optional: explicitly unbind texture
 		}
@@ -298,7 +312,7 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	drawTriangleTextured(
-		tex: GLTexture,
+		tex: Texture,
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
@@ -314,7 +328,7 @@ export class WebGLRenderer implements Renderer {
 			this.flush();
 			this.textureEnabled = true;
 			this.currentTexture = tex;
-			this.bindTexture(tex);
+			this.currentTexture.bind();
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([
@@ -344,7 +358,7 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	drawQuadTextured(
-		tex: GLTexture,
+		tex: Texture,
 		x1: number, y1: number, r1: number, g1: number, b1: number, a1: number, u1: number, v1: number,
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number,
@@ -455,15 +469,10 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	// textures
-	loadTex(url: string): GLTexture {
+	loadTex(url: string): Texture {
 		const gl = this.gl;
-		const texture = gl.createTexture() as GLTexture;
-		if (!texture) {
-			throw new Error("Failed to create texture");
-		}
-
-		// Bind the texture to texture unit 0
-		gl.bindTexture(gl.TEXTURE_2D, texture);
+		const texture = new Texture(gl);
+		texture.bind(0)
 
 		// Set texture parameters (wrapping and filtering)
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -479,7 +488,7 @@ export class WebGLRenderer implements Renderer {
 		const image = new Image();
 		image.onload = () => {
 			// Once the image is loaded, upload it to the texture
-			gl.bindTexture(gl.TEXTURE_2D, texture);
+			texture.bind(0);
 			gl.texImage2D(
 				gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image
 			);
@@ -494,7 +503,7 @@ export class WebGLRenderer implements Renderer {
 		return texture;
 	}
 
-	drawTex(tex: GLTexture, x: number = 0.0, y: number = 0.0): void {
+	drawTex(tex: Texture, x: number = 0.0, y: number = 0.0): void {
 		const w = tex.width;
 		const h = tex.height;
 		const c = this.currentColor;
@@ -512,7 +521,7 @@ export class WebGLRenderer implements Renderer {
 		);
 	}
 
-	drawTexRect(tex: GLTexture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void {
+	drawTexRect(tex: Texture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void {
 		const w = tex.width;
 		const h = tex.height;
 		sourceX = clamp(sourceX, 0, w)
@@ -592,11 +601,6 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	// private methods
-	private bindTexture(tex: GLTexture): void {
-		this.gl.activeTexture(this.gl.TEXTURE0);
-		this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
-	}
-
 	private setViewportSize(width: number, height: number): void {
 		const gl = this.gl;
 		this.viewportWidth = width;

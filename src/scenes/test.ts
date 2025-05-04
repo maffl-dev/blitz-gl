@@ -1,10 +1,10 @@
 import { semiGreen, white } from "@/engine/colors";
-import { BlendMode, GLTexture, Renderer } from "@/engine/renderer";
+import { BlendMode, Texture, Renderer } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 
 class TestScene extends Scene {
 	x: number = 0.0
-	private myTexture!: GLTexture;
+	private myTexture!: Texture;
 
 	init(r: Renderer): void {
 		console.log("init test scene");
@@ -19,7 +19,8 @@ class TestScene extends Scene {
 		// this.drawBasic(r)
 		// this.drawShapes(r)
 		// this.drawTextures(r)
-		this.drawTranslated(r)
+		// this.drawTranslated(r)
+		this.drawRenderToTexture(r)
 	}
 
 	drawBasic(r: Renderer): void {
@@ -92,6 +93,10 @@ class TestScene extends Scene {
 			r.drawRect(0, 0, 10, 10)
 		}
 		r.pop()
+	}
+
+	drawRenderToTexture(r: Renderer): void {
+
 	}
 }
 
