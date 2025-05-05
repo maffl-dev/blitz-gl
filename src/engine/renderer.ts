@@ -56,6 +56,7 @@ export interface Renderer {
 	applyTransform(ix: number, iy: number, jx: number, jy: number, tx: number, ty: number): void
 	push(): void
 	pop(): void
+	origin(): void
 
 	// shaders
 	setShader(shader: Shader): void;
@@ -307,7 +308,7 @@ export class WebGLRenderer implements Renderer {
 		this.textureEnabled = false;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
-		this.replaceTransform(1, 0, 0, 1, 0, 0);
+		this.origin();
 		this.transformStack.length = 0;
 		this.setShader(this.defaultShader);
 	}
@@ -664,6 +665,10 @@ export class WebGLRenderer implements Renderer {
 		if (t) {
 			this.currentTransform = t;
 		}
+	}
+
+	origin(): void {
+		this.replaceTransform(1, 0, 0, 1, 0, 0);
 	}
 
 	// shaders
