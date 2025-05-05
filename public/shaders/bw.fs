@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 in vec4 Color;
 in vec2 UV;
 
@@ -10,7 +7,7 @@ uniform float Level;
 out vec4 FragColor;
 
 void main() {
-	vec4 color = texture(Texture, vec2(UV.x, 1.0 - UV.y)) * Color;
+	vec4 color = texture(Texture, UV) * Color;
 	
 	// Apply grayscale blend
 	float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));

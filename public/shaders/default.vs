@@ -1,6 +1,3 @@
-#version 300 es
-precision mediump float;
-
 in vec2 position;
 in vec4 color;
 in vec2 uv;

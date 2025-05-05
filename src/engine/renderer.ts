@@ -425,9 +425,9 @@ export class WebGLRenderer implements Renderer {
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([
-			tx1, ty1, r1, g1, b1, a1, u1, v1,
-			tx2, ty2, r2, g2, b2, a2, u2, v2,
-			tx3, ty3, r3, g3, b3, a3, u3, v3
+			tx1, ty1, r1, g1, b1, a1, u1, 1.0 - v1,
+			tx2, ty2, r2, g2, b2, a2, u2, 1.0 - v2,
+			tx3, ty3, r3, g3, b3, a3, u3, 1.0 - v3
 		], base);
 		this.vertexCount += 3;
 	}
@@ -787,10 +787,11 @@ function createProgram(
 
 function compileShader(gl: WebGL2RenderingContext, type: GLenum, source: string): WebGLShader {
 	const shader = gl.createShader(type);
+	const version = "#version 300 es\nprecision highp float;\n";
 	if (!shader) {
 		panic("Failed to create shader");
 	}
-	gl.shaderSource(shader, source);
+	gl.shaderSource(shader, version + source);
 	gl.compileShader(shader);
 	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
 		const log = gl.getShaderInfoLog(shader);
