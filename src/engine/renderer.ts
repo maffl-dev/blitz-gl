@@ -59,7 +59,7 @@ export interface Renderer {
 	origin(): void
 
 	// shaders
-	setShader(shader: Shader): void;
+	setShader(shader?: Shader): void;
 	createVertexShader(vs: string | WebGLShader): Shader;
 	createFragShader(fs: string | WebGLShader): Shader;
 	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader;
@@ -88,6 +88,33 @@ export class Texture {
 		if (!this.data) {
 			panic("Failed to create Texture");
 		}
+	}
+
+	static createWhiteFallback(gl: WebGL2RenderingContext): Texture {
+		const texture = new Texture(gl);
+		texture.width = 1;
+		texture.height = 1;
+
+		gl.bindTexture(gl.TEXTURE_2D, texture.data);
+
+		const white = new Uint8Array([255, 255, 255, 255]);
+		gl.texImage2D(
+			gl.TEXTURE_2D,
+			0,
+			gl.RGBA,
+			1, 1,
+			0,
+			gl.RGBA,
+			gl.UNSIGNED_BYTE,
+			white
+		);
+
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+		return texture;
 	}
 
 	bind(unit: number = 0): void {
@@ -207,17 +234,18 @@ export class WebGLRenderer implements Renderer {
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
 	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
 
-	private defaultShader!: Shader;
-	private defaultVsShader!: WebGLShader;
-	private defaultFragShader!: WebGLShader;
 	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
 	private vertexCount = 0;
-	private textureEnabled: boolean = false;
+
+	private defaultShader!: Shader;
+	private defaultVsShader!: WebGLShader;
+	private defaultFragShader!: WebGLShader;
+	private fallbackTexture!: Texture;
 
 	// state
 	private currentShader!: Shader;
-	private currentTexture: Texture | null = null;
+	private currentTexture!: Texture;
 	private currentColor: Color = [...white];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
 	private currentTransform: RenderTransform = {
@@ -267,7 +295,7 @@ export class WebGLRenderer implements Renderer {
 		this.defaultShader = new Shader(gl, program);
 		this.currentShader = this.defaultShader;
 		this.currentShader.use();
-		this.currentShader.setUniform("UseTexture", this.textureEnabled ? 1 : 0)
+		this.fallbackTexture = Texture.createWhiteFallback(gl);
 
 		this.extTimerQuery = gl.getExtension("EXT_disjoint_timer_query_webgl2");
 		if (!this.extTimerQuery) {
@@ -305,12 +333,13 @@ export class WebGLRenderer implements Renderer {
 		gl.clearColor(...black);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 		this.vertexCount = 0;
-		this.textureEnabled = false;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);
 		this.origin();
 		this.transformStack.length = 0;
 		this.setShader(this.defaultShader);
+		this.currentTexture = this.fallbackTexture;
+		this.currentTexture.bind();
 	}
 
 	flush(): void {
@@ -318,24 +347,18 @@ export class WebGLRenderer implements Renderer {
 
 		if (this.vertexCount === 0) return;
 
-		if (this.textureEnabled && this.currentTexture) {
-			this.currentTexture.bind();
-		} else {
-			gl.bindTexture(gl.TEXTURE_2D, null); // Optional: explicitly unbind texture
-		}
+		this.currentTexture.bind();
 
 		// Bind and update vertex data
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * this.VERTEX_SIZE));
 
-		this.currentShader.setUniform("UseTexture", this.textureEnabled ? 1 : 0)
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
 
 		this.metrics.drawCalls++;
 		this.metrics.triangleCount += this.vertexCount / 3;
 
 		this.vertexCount = 0;
-		this.textureEnabled = false;
 	}
 
 	endFrame(): void {
@@ -370,9 +393,10 @@ export class WebGLRenderer implements Renderer {
 		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
 		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
 		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
-		if (this.textureEnabled) {
+		if (this.currentTexture !== this.fallbackTexture) {
 			this.flush();
-			this.textureEnabled = false;
+			this.currentTexture = this.fallbackTexture;
+			this.currentTexture.bind();
 		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([tx1, ty1, r1, g1, b1, a1, 0.0, 0.0], base);
@@ -394,9 +418,8 @@ export class WebGLRenderer implements Renderer {
 		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
 		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
 		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
-		if (!this.textureEnabled || this.currentTexture !== tex) {
+		if (this.currentTexture !== tex) {
 			this.flush();
-			this.textureEnabled = true;
 			this.currentTexture = tex;
 			this.currentTexture.bind();
 		}
@@ -672,8 +695,11 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	// shaders
-	setShader(shader: Shader): void {
+	setShader(shader?: Shader): void {
 		this.flush();
+		if (!shader) {
+			shader = this.defaultShader;
+		}
 		this.currentShader = shader;
 		this.currentShader.use();
 		shader.setUniform("Resolution", [this.viewportWidth, this.viewportHeight])

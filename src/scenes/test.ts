@@ -80,6 +80,9 @@ class TestScene extends Scene {
 		r.setColor(...white)
 		r.setShader(this.bwShader)
 		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 200)
+
+		r.setShader(); // reset shader
+		r.drawTex(this.myTexture, 100, 100)
 	}
 
 	drawTranslated(r: Renderer): void {
