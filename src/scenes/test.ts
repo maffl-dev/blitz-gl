@@ -1,14 +1,20 @@
 import { semiGreen, white } from "@/engine/colors";
-import { BlendMode, Texture, Renderer } from "@/engine/renderer";
+import { BlendMode, Texture, Renderer, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
+import { loadString } from "@/engine/utils";
 
 class TestScene extends Scene {
 	x: number = 0.0
 	private myTexture!: Texture;
+	private bwShader!: Shader;
 
 	init(r: Renderer): void {
 		console.log("init test scene");
 		this.myTexture = r.loadTex("/common/test.png")
+
+		const bw = loadString("/shaders/bw.fs");
+		this.bwShader = r.createFragShader(bw)
+		this.bwShader.setUniform("u_Level", 1.0);
 	}
 
 	update(dt: number): void {
@@ -20,7 +26,6 @@ class TestScene extends Scene {
 		// this.drawShapes(r)
 		this.drawTextures(r)
 		// this.drawTranslated(r)
-		// this.drawRenderToTexture(r)
 	}
 
 	drawBasic(r: Renderer): void {
@@ -66,12 +71,15 @@ class TestScene extends Scene {
 		r.setAlpha(0.7)
 		r.setColor(1.0, 0.2, 0.2)
 		r.drawTex(this.myTexture, 52, 52)
+
 		r.setColor(...semiGreen)
 		r.setBlendmode(BlendMode.Additive)
 		r.drawTex(this.myTexture, 182, 52)
+
 		r.setBlendmode(BlendMode.Alpha)
 		r.setColor(...white)
-		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 100)
+		r.setShader(this.bwShader)
+		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 200)
 	}
 
 	drawTranslated(r: Renderer): void {
@@ -95,9 +103,6 @@ class TestScene extends Scene {
 		r.pop()
 	}
 
-	drawRenderToTexture(r: Renderer): void {
-
-	}
 }
 
 

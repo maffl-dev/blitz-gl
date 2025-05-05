@@ -1,5 +1,5 @@
 import { black, Color, white } from "./colors";
-import { assert, clamp, panic } from "./utils";
+import { assert, clamp, loadString, panic } from "./utils";
 
 export interface Renderer {
 	// low level basics
@@ -57,6 +57,12 @@ export interface Renderer {
 	push(): void
 	pop(): void
 
+	// shaders
+	setShader(shader: Shader): void;
+	createVertexShader(vs: string | WebGLShader): Shader;
+	createFragShader(fs: string | WebGLShader): Shader;
+	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader;
+
 	// other
 	getMetrics(): Readonly<RenderMetrics>
 
@@ -79,7 +85,7 @@ export class Texture {
 		this.gl = gl
 		this.data = gl.createTexture()
 		if (!this.data) {
-			throw new Error("Failed to create Texture");
+			panic("Failed to create Texture");
 		}
 	}
 
@@ -92,7 +98,8 @@ export class Texture {
 
 export class Shader {
 	private gl: WebGL2RenderingContext
-	private program: WebGLProgram
+	program: WebGLProgram
+	private static currentProgram: WebGLProgram | null = null;
 	private uniformLocations: Map<string, WebGLUniformLocation> = new Map();
 
 	constructor(gl: WebGL2RenderingContext, program: WebGLProgram) {
@@ -101,10 +108,37 @@ export class Shader {
 	}
 
 	use(): void {
-		this.gl.useProgram(this.program)
+		if (Shader.currentProgram !== this.program) {
+			this.gl.useProgram(this.program)
+			this.setupAttributes();
+			Shader.currentProgram = this.program;
+		}
+	}
+
+	private setupAttributes(): void {
+		const gl = this.gl
+		const vertexSize = 8; // TODO: should use renderer VERTEX_SIZE
+		const stride = vertexSize * Float32Array.BYTES_PER_ELEMENT;
+
+		// Position attribute
+		const positionLoc = this.getAttribLocation("a_position");
+		gl.enableVertexAttribArray(positionLoc);
+		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
+
+		// Color attribute
+		const colorLoc = this.getAttribLocation("a_color");
+		gl.enableVertexAttribArray(colorLoc);
+		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+		// UV attribute
+		const uvLoc = this.getAttribLocation("a_uv");
+		gl.enableVertexAttribArray(uvLoc);
+		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
 	}
 
 	setUniform(name: string, value: number | number[] | Texture): void {
+		this.use();
+
 		const location = this.getUniformLocation(name);
 		if (location === null) return;
 
@@ -135,7 +169,7 @@ export class Shader {
 
 	getAttribLocation(name: string): number {
 		const loc = this.gl.getAttribLocation(this.program, name);
-		if (loc === -1) throw new Error(`Attribute ${name} not found`);
+		if (loc === -1) panic(`Attribute ${name} not found`);
 		return loc;
 	}
 
@@ -156,7 +190,7 @@ export interface RenderMetrics {
 	triangleCount: number
 }
 
-interface RenderTransform {
+export interface RenderTransform {
 	ix: number, iy: number,
 	jx: number, jy: number
 	tx: number, ty: number
@@ -173,6 +207,8 @@ export class WebGLRenderer implements Renderer {
 	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
 
 	private defaultShader!: Shader;
+	private defaultVsShader!: WebGLShader;
+	private defaultFragShader!: WebGLShader;
 	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
 	private vertexCount = 0;
@@ -205,7 +241,7 @@ export class WebGLRenderer implements Renderer {
 
 	constructor(canvas: HTMLCanvasElement) {
 		const gl = canvas.getContext("webgl2", { antialias: false });
-		if (!gl) throw new Error("WebGL2 not supported");
+		if (!gl) panic("WebGL2 not supported");
 		this.gl = gl;
 		this.canvas = canvas;
 		this.initGL();
@@ -214,38 +250,22 @@ export class WebGLRenderer implements Renderer {
 
 	private initGL() {
 		const gl = this.gl;
-		this.vertexData = new Float32Array(this.MAX_TRIANGLES * 3 * this.VERTEX_SIZE); // 2 for position, 4 for color, 2 for uv
-
-		const vsSource = loadShader('/shaders/default.vs');
-		const fsSource = loadShader('/shaders/default.fs');
-		const program = createProgram(gl, vsSource, fsSource);
-		this.defaultShader = new Shader(gl, program);
-		this.currentShader = this.defaultShader;
-		this.currentShader.use();
 
 		// Create and setup position buffer
+		this.vertexData = new Float32Array(this.MAX_TRIANGLES * 3 * this.VERTEX_SIZE); // 2 for position, 4 for color, 2 for uv
 		this.vertexBuffer = gl.createBuffer()!;
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, this.vertexData.byteLength, gl.DYNAMIC_DRAW);
 
-		const stride = this.VERTEX_SIZE * Float32Array.BYTES_PER_ELEMENT;
-
-		// Position attribute
-		const positionLoc = this.currentShader.getAttribLocation("a_position");
-		gl.enableVertexAttribArray(positionLoc);
-		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
-
-		// Color attribute
-		const colorLoc = this.currentShader.getAttribLocation("a_color");
-		gl.enableVertexAttribArray(colorLoc);
-		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
-
-		// UV attribute
-		const uvLoc = this.currentShader.getAttribLocation("a_uv");
-		gl.enableVertexAttribArray(uvLoc);
-		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
-
-		// Default to not using textures initially
+		// default shader
+		const vsSource = loadString('/shaders/default.vs');
+		const fsSource = loadString('/shaders/default.fs');
+		this.defaultVsShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+		this.defaultFragShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+		const program = createProgram(gl, this.defaultVsShader, this.defaultFragShader);
+		this.defaultShader = new Shader(gl, program);
+		this.currentShader = this.defaultShader;
+		this.currentShader.use();
 		this.currentShader.setUniform("u_useTexture", this.textureEnabled ? 1 : 0)
 
 		this.extTimerQuery = gl.getExtension("EXT_disjoint_timer_query_webgl2");
@@ -289,6 +309,7 @@ export class WebGLRenderer implements Renderer {
 		this.setBlendmode(BlendMode.Alpha);
 		this.replaceTransform(1, 0, 0, 1, 0, 0);
 		this.transformStack.length = 0;
+		this.setShader(this.defaultShader);
 	}
 
 	flush(): void {
@@ -453,7 +474,7 @@ export class WebGLRenderer implements Renderer {
 				gl.blendFunc(gl.DST_COLOR, gl.ZERO);
 				break;
 			default:
-				throw new Error("unknown blendmode:" + mode);
+				panic("unknown blendmode:" + mode);
 		}
 	}
 
@@ -581,6 +602,8 @@ export class WebGLRenderer implements Renderer {
 			return
 		}
 
+		// this.logActiveUniforms(this.gl, this.currentShader.program)
+
 		const u1 = sourceX / w;
 		const v1 = 1 - sourceY / h;
 		const u2 = (sourceX + sourceWidth) / w;
@@ -643,6 +666,36 @@ export class WebGLRenderer implements Renderer {
 		}
 	}
 
+	// shaders
+	setShader(shader: Shader): void {
+		this.flush();
+		this.currentShader = shader;
+		this.currentShader.use();
+		shader.setUniform("u_resolution", [this.viewportWidth, this.viewportHeight])
+	}
+
+	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader {
+		const gl = this.gl
+		const program = createProgram(gl, vs, fs);
+		const shader = new Shader(gl, program)
+		return shader
+	}
+
+	createVertexShader(vs: string | WebGLShader): Shader {
+		const gl = this.gl
+		const program = createProgram(gl, vs, this.defaultFragShader);
+		const shader = new Shader(gl, program)
+		return shader
+	}
+
+	createFragShader(fs: string | WebGLShader): Shader {
+		const gl = this.gl
+		const program = createProgram(gl, this.defaultVsShader, fs);
+		const shader = new Shader(gl, program)
+		return shader
+	}
+
+
 	// other
 	getMetrics(): Readonly<RenderMetrics> {
 		return this.metrics;
@@ -655,36 +708,48 @@ export class WebGLRenderer implements Renderer {
 		this.viewportWidth = width;
 		this.viewportHeight = height;
 		gl.viewport(0, 0, width, height);
-		shader.use()
 		shader.setUniform("u_resolution", [width, height])
 	}
 
-}
+	private logActiveUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): void {
+		const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+		console.log(`Active uniforms in program:`);
 
-function loadShader(path: string): string {
-	const request = new XMLHttpRequest();
-	request.open('GET', path, false);  // false makes the request synchronous
-	request.send(null);
+		for (let i = 0; i < numUniforms; ++i) {
+			const info = gl.getActiveUniform(program, i);
+			if (!info) continue;
 
-	if (request.status === 200) {
-		return request.responseText;
-	} else {
-		throw new Error(`Failed to load shader: ${path}`);
+			const name = info.name;
+			const location = gl.getUniformLocation(program, name);
+			if (location) {
+				const value = gl.getUniform(program, location);
+				console.log(`${name} (${info.type}):`, value);
+			}
+		}
 	}
+
 }
 
-function createProgram(gl: WebGL2RenderingContext, vsSource: string, fsSource: string): WebGLProgram {
-	const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource)!;
-	const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource)!;
+function createProgram(
+	gl: WebGL2RenderingContext,
+	vertexShader: string | WebGLShader,
+	fragmentShader: string | WebGLShader
+): WebGLProgram {
+	const vs = typeof vertexShader === "string"
+		? compileShader(gl, gl.VERTEX_SHADER, vertexShader)!
+		: vertexShader;
+	const fs = typeof fragmentShader === "string"
+		? compileShader(gl, gl.FRAGMENT_SHADER, fragmentShader)!
+		: fragmentShader;
 	const program = gl.createProgram();
 	if (!program) {
-		throw new Error("Failed to create program")
+		panic("Failed to create program")
 	}
 	gl.attachShader(program, vs);
 	gl.attachShader(program, fs);
 	gl.linkProgram(program);
 	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-		throw new Error("Failed to link program:\n" + gl.getProgramInfoLog(program));
+		panic("Failed to link program:\n" + gl.getProgramInfoLog(program));
 	}
 	return program;
 }
@@ -692,7 +757,7 @@ function createProgram(gl: WebGL2RenderingContext, vsSource: string, fsSource: s
 function compileShader(gl: WebGL2RenderingContext, type: GLenum, source: string): WebGLShader {
 	const shader = gl.createShader(type);
 	if (!shader) {
-		throw new Error("Failed to create shader");
+		panic("Failed to create shader");
 	}
 	gl.shaderSource(shader, source);
 	gl.compileShader(shader);
@@ -700,7 +765,8 @@ function compileShader(gl: WebGL2RenderingContext, type: GLenum, source: string)
 		const log = gl.getShaderInfoLog(shader);
 		gl.deleteShader(shader);
 		console.error(log);
-		throw new Error("Shader compilation failed");
+		console.error(source);
+		panic("Shader compilation failed");
 	}
 	return shader;
 }
