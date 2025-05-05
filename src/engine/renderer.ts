@@ -60,9 +60,9 @@ export interface Renderer {
 
 	// shaders
 	setShader(shader?: Shader): void;
-	createVertexShader(vs: string | WebGLShader): Shader;
-	createFragShader(fs: string | WebGLShader): Shader;
-	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader;
+	createVertexShader(vs: string): Shader;
+	createFragShader(fs: string): Shader;
+	createShader(vs: string, fs: string): Shader;
 
 	// other
 	getMetrics(): Readonly<RenderMetrics>
@@ -705,21 +705,21 @@ export class WebGLRenderer implements Renderer {
 		shader.setUniform("Resolution", [this.viewportWidth, this.viewportHeight])
 	}
 
-	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader {
+	createShader(vs: string, fs: string): Shader {
 		const gl = this.gl
 		const program = createProgram(gl, vs, fs);
 		const shader = new Shader(gl, program)
 		return shader
 	}
 
-	createVertexShader(vs: string | WebGLShader): Shader {
+	createVertexShader(vs: string): Shader {
 		const gl = this.gl
 		const program = createProgram(gl, vs, this.defaultFragShader);
 		const shader = new Shader(gl, program)
 		return shader
 	}
 
-	createFragShader(fs: string | WebGLShader): Shader {
+	createFragShader(fs: string): Shader {
 		const gl = this.gl
 		const program = createProgram(gl, this.defaultVsShader, fs);
 		const shader = new Shader(gl, program)
