@@ -121,17 +121,17 @@ export class Shader {
 		const stride = vertexSize * Float32Array.BYTES_PER_ELEMENT;
 
 		// Position attribute
-		const positionLoc = this.getAttribLocation("a_position");
+		const positionLoc = this.getAttribLocation("position");
 		gl.enableVertexAttribArray(positionLoc);
 		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, stride, 0);
 
 		// Color attribute
-		const colorLoc = this.getAttribLocation("a_color");
+		const colorLoc = this.getAttribLocation("color");
 		gl.enableVertexAttribArray(colorLoc);
 		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
 
 		// UV attribute
-		const uvLoc = this.getAttribLocation("a_uv");
+		const uvLoc = this.getAttribLocation("uv");
 		gl.enableVertexAttribArray(uvLoc);
 		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
 	}
@@ -266,7 +266,7 @@ export class WebGLRenderer implements Renderer {
 		this.defaultShader = new Shader(gl, program);
 		this.currentShader = this.defaultShader;
 		this.currentShader.use();
-		this.currentShader.setUniform("u_useTexture", this.textureEnabled ? 1 : 0)
+		this.currentShader.setUniform("UseTexture", this.textureEnabled ? 1 : 0)
 
 		this.extTimerQuery = gl.getExtension("EXT_disjoint_timer_query_webgl2");
 		if (!this.extTimerQuery) {
@@ -327,7 +327,7 @@ export class WebGLRenderer implements Renderer {
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
 		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * this.VERTEX_SIZE));
 
-		this.currentShader.setUniform("u_useTexture", this.textureEnabled ? 1 : 0)
+		this.currentShader.setUniform("UseTexture", this.textureEnabled ? 1 : 0)
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
 
 		this.metrics.drawCalls++;
@@ -671,7 +671,7 @@ export class WebGLRenderer implements Renderer {
 		this.flush();
 		this.currentShader = shader;
 		this.currentShader.use();
-		shader.setUniform("u_resolution", [this.viewportWidth, this.viewportHeight])
+		shader.setUniform("Resolution", [this.viewportWidth, this.viewportHeight])
 	}
 
 	createShader(vs: string | WebGLShader, fs: string | WebGLShader): Shader {
@@ -708,7 +708,7 @@ export class WebGLRenderer implements Renderer {
 		this.viewportWidth = width;
 		this.viewportHeight = height;
 		gl.viewport(0, 0, width, height);
-		shader.setUniform("u_resolution", [width, height])
+		shader.setUniform("Resolution", [width, height])
 	}
 
 	private logActiveUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): void {

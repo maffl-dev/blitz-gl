@@ -14,7 +14,7 @@ class TestScene extends Scene {
 
 		const bw = loadString("/shaders/bw.fs");
 		this.bwShader = r.createFragShader(bw)
-		this.bwShader.setUniform("u_Level", 1.0);
+		this.bwShader.setUniform("Level", 1.0);
 	}
 
 	update(dt: number): void {

@@ -1,23 +1,23 @@
 #version 300 es
 precision mediump float;
 
-in vec2 a_position;
-in vec4 a_color;
-in vec2 a_uv;
+in vec2 position;
+in vec4 color;
+in vec2 uv;
 
-uniform vec2 u_resolution;
+uniform vec2 Resolution;
 
-out vec4 v_color;
-out vec2 v_uv;
+out vec4 Color;
+out vec2 UV;
 
 void main() {
 	// Convert from pixels to clipspace
-	vec2 zeroToOne = a_position / u_resolution;
+	vec2 zeroToOne = position / Resolution;
 	vec2 zeroToTwo = zeroToOne * 2.0;
 	vec2 clipSpace = zeroToTwo - 1.0;
 	
 	// Flip Y to make origin top-left
 	gl_Position = vec4(clipSpace * vec2(1, - 1), 0, 1);
-	v_color = a_color;
-	v_uv = a_uv;
+	Color = color;
+	UV = uv;
 }
