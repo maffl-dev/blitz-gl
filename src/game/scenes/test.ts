@@ -20,7 +20,8 @@ class TestScene extends Scene {
 
 		this.glitchShader = r.createFragShader(loadString("/shaders/glitch.fs"));
 		this.glitchShader.setUniform("Time", this.time);
-		this.glitchShader.setUniform("Strength", 0.75);
+		this.glitchShader.setUniform("Strength", 0.4);
+		this.glitchShader.setUniform("Amount", 1.0);
 	}
 
 	update(dt: number): void {

@@ -251,7 +251,7 @@ export class WebGLRenderer implements Renderer {
 	private currentShader!: Shader;
 	private currentTexture!: Texture;
 	private currentColor: Color = [...white];
-	private currentSetColor: number[3] = [1.0, 1.0, 1.0];
+	private currentSetColor: number[] = [1.0, 1.0, 1.0];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
 	private currentTransform: RenderTransform = {
 		ix: 1, iy: 0,
