@@ -1,9 +1,9 @@
-import { black, Color, white } from "./colors";
+import { Color, white } from "./colors";
 import { assert, clamp, loadString, panic } from "./utils";
 
 export interface Renderer {
 	// low level basics
-	beginFrame(): void
+	beginFrame(clearColor: Color): void
 	flush(): void
 	endFrame(): void
 
@@ -312,7 +312,7 @@ export class WebGLRenderer implements Renderer {
 		}
 	}
 
-	beginFrame(): void {
+	beginFrame(clearColor: Color): void {
 		const gl = this.gl;
 		const ext = this.extTimerQuery;
 
@@ -339,8 +339,9 @@ export class WebGLRenderer implements Renderer {
 		}
 
 		gl.viewport(0, 0, this.viewportWidth, this.viewportHeight);
-		gl.clearColor(...black);
+		gl.clearColor(...clearColor);
 		gl.clear(gl.COLOR_BUFFER_BIT);
+
 		this.vertexCount = 0;
 		this.setColor(...white);
 		this.setBlendmode(BlendMode.Alpha);

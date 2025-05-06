@@ -1,3 +1,4 @@
+import { black, Color } from "./colors"
 import { Renderer } from "./renderer"
 
 abstract class Scene {
@@ -8,6 +9,9 @@ abstract class Scene {
 	onExit(nextScene: Scene): void { }
 	canPause(): boolean {
 		return false
+	}
+	clearColor(): Color {
+		return black;
 	}
 
 }

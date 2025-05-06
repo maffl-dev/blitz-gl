@@ -1,4 +1,4 @@
-import { semiGreen, white } from "@/engine/colors";
+import { Color, semiGreen, white } from "@/engine/colors";
 import { BlendMode, Texture, Renderer, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 import { loadString } from "@/engine/utils";
@@ -26,6 +26,10 @@ class TestScene extends Scene {
 		this.drawShapes(r)
 		// this.drawTextures(r)
 		// this.drawTranslated(r)
+	}
+
+	clearColor(): Color {
+		return [0.5, 0.5, 0.5, 1.0]
 	}
 
 	drawBasic(r: Renderer): void {

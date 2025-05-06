@@ -28,8 +28,8 @@ export class Engine {
 	}
 
 	render() {
-		this.renderer.beginFrame()
 		assert(this.activeScene, "Engine.render: no active scene!")
+		this.renderer.beginFrame(this.activeScene.clearColor())
 		this.activeScene.render(this.renderer)
 		this.renderer.endFrame()
 	}
