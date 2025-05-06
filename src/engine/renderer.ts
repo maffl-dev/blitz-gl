@@ -233,6 +233,7 @@ export class WebGLRenderer implements Renderer {
 	private readonly MAX_TRIANGLES = 1024;
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
 	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
+	private readonly MAX_TEXTURE_SIZE = 4096;
 
 	private vertexBuffer!: WebGLBuffer;
 	private vertexData!: Float32Array;
@@ -242,11 +243,15 @@ export class WebGLRenderer implements Renderer {
 	private defaultVsShader!: WebGLShader;
 	private defaultFragShader!: WebGLShader;
 	private fallbackTexture!: Texture;
+	private whitePixel = new Uint8Array([255, 255, 255, 255]);
+	private premultiplyCanvas: HTMLCanvasElement
+	private premultiplyContext: CanvasRenderingContext2D
 
 	// state
 	private currentShader!: Shader;
 	private currentTexture!: Texture;
 	private currentColor: Color = [...white];
+	private currentSetColor: number[3] = [1.0, 1.0, 1.0];
 	private currentBlendMode: BlendMode = BlendMode.Opaque;
 	private currentTransform: RenderTransform = {
 		ix: 1, iy: 0,
@@ -273,6 +278,10 @@ export class WebGLRenderer implements Renderer {
 		if (!gl) panic("WebGL2 not supported");
 		this.gl = gl;
 		this.canvas = canvas;
+		this.premultiplyCanvas = document.createElement('canvas');
+		this.premultiplyCanvas.width = this.MAX_TEXTURE_SIZE;
+		this.premultiplyCanvas.height = this.MAX_TEXTURE_SIZE;
+		this.premultiplyContext = this.premultiplyCanvas.getContext('2d')!;
 		this.initGL();
 		this.setViewportSize(canvas.width, canvas.height);
 	}
@@ -457,14 +466,12 @@ export class WebGLRenderer implements Renderer {
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number,
 		x4: number, y4: number, r4: number, g4: number, b4: number, a4: number, u4: number, v4: number
 	): void {
-		// Draw first triangle of quad
 		this.drawTriangleTextured(
 			tex,
 			x1, y1, r1, g1, b1, a1, u1, v1,
 			x2, y2, r2, g2, b2, a2, u2, v2,
 			x3, y3, r3, g3, b3, a3, u3, v3
 		);
-		// Draw second triangle of quad
 		this.drawTriangleTextured(
 			tex,
 			x1, y1, r1, g1, b1, a1, u1, v1,
@@ -503,14 +510,21 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	setColor(r: number, g: number, b: number, a?: number): void {
-		this.currentColor[0] = r
-		this.currentColor[1] = g
-		this.currentColor[2] = b
-		this.currentColor[3] = a ?? this.currentColor[3];
+		const alpha = a ?? this.currentColor[3];
+		this.currentColor[0] = r * alpha;
+		this.currentColor[1] = g * alpha;
+		this.currentColor[2] = b * alpha;
+		this.currentColor[3] = alpha;
+		this.currentSetColor[0] = r;
+		this.currentSetColor[1] = g;
+		this.currentSetColor[2] = b;
 	}
 
 	setAlpha(a: number): void {
-		this.currentColor[3] = a
+		this.currentColor[0] = this.currentSetColor[0] * a;
+		this.currentColor[1] = this.currentSetColor[1] * a;
+		this.currentColor[2] = this.currentSetColor[2] * a;
+		this.currentColor[3] = a;
 	}
 
 	// shapes
@@ -565,31 +579,56 @@ export class WebGLRenderer implements Renderer {
 	loadTex(url: string): Texture {
 		const gl = this.gl;
 		const texture = new Texture(gl);
-		texture.bind(0)
+		texture.bind(0);
 
-		// Set texture parameters (wrapping and filtering)
+		// Set texture parameters
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-		// Load a 1x1 white pixel initially to prevent a blank canvas
-		const whitePixel = new Uint8Array([255, 255, 255, 255]); // RGBA white pixel
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, whitePixel);
+		// Placeholder 1x1 white pixel
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.whitePixel);
 
-		// Load the image asynchronously
+		// const ms = Date.now();
+
 		const image = new Image();
+		image.crossOrigin = "anonymous";
 		image.onload = () => {
-			// Once the image is loaded, upload it to the texture
 			texture.bind(0);
-			gl.texImage2D(
-				gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image
+			assert(
+				image.width < this.MAX_TEXTURE_SIZE && image.height < this.MAX_TEXTURE_SIZE,
+				"Max texture size (" + this.MAX_TEXTURE_SIZE + ") exceeded: " + url
 			);
+			// Draw image into canvas
+			const ctx = this.premultiplyContext;
+			ctx.clearRect(0, 0, image.width, image.height);
+			ctx.drawImage(image, 0, 0);
+
+			// Get pixel data
+			const imageData = ctx.getImageData(0, 0, image.width, image.height);
+			const data = imageData.data;
+
+			// Premultiply alpha
+			for (let i = 0; i < data.length; i += 4) {
+				const alpha = data[i + 3] / 255;
+				data[i + 0] = Math.round(data[i + 0] * alpha);
+				data[i + 1] = Math.round(data[i + 1] * alpha);
+				data[i + 2] = Math.round(data[i + 2] * alpha);
+				// data[i + 3] stays the same
+			}
+
+			// Upload to GPU
+			gl.texImage2D(
+				gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0,
+				gl.RGBA, gl.UNSIGNED_BYTE, data
+			);
+
 			texture.width = image.width;
 			texture.height = image.height;
 
-			// Mipmap generation (optional, but useful for scaling textures)
 			gl.generateMipmap(gl.TEXTURE_2D);
+			// console.log("loading tex:" + url + " took: " + (Date.now() - ms))
 		};
 
 		image.src = url;
