@@ -15,5 +15,5 @@ gameDiv.appendChild(canvas)
 
 const renderer = new WebGLRenderer(canvas)
 const engine = new Engine(renderer)
-engine.systems.add(new DebugStats)
+// engine.systems.add(new DebugStats)
 engine.changeScene(new TestScene)

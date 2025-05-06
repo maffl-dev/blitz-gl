@@ -1,4 +1,4 @@
-import { Renderer } from "../renderer"
+import { Renderer } from "../engine/renderer"
 
 export abstract class System {
 	abstract update(dt: number): void

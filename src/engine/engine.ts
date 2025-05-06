@@ -1,4 +1,4 @@
-import { assert } from "./utils"
+import { assert, clamp } from "./utils"
 import { Renderer } from "./renderer"
 import { Scene } from "./scene"
 import { SystemManager } from "./systems"
@@ -17,7 +17,8 @@ export class Engine {
 	}
 
 	loop = (time: number) => {
-		const dt: number = Math.min(time - this.lastTime, 0.1)
+		let dt: number = (time - this.lastTime) / 1000.0;
+		dt = clamp(dt, 0.001, 0.1);
 		this.lastTime = time
 
 		this.update(dt)

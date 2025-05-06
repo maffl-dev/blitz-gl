@@ -5,8 +5,10 @@ import { loadString } from "@/engine/utils";
 
 class TestScene extends Scene {
 	x: number = 0.0
+	time: number = 0.0;
 	private myTexture!: Texture;
 	private bwShader!: Shader;
+	private glitchShader!: Shader;
 
 	init(r: Renderer): void {
 		console.log("init test scene");
@@ -15,16 +17,21 @@ class TestScene extends Scene {
 		const bw = loadString("/shaders/bw.fs");
 		this.bwShader = r.createFragShader(bw)
 		this.bwShader.setUniform("Level", 1.0);
+
+		this.glitchShader = r.createFragShader(loadString("/shaders/glitch.fs"));
+		this.glitchShader.setUniform("Time", this.time);
+		this.glitchShader.setUniform("Strength", 0.75);
 	}
 
 	update(dt: number): void {
 		this.x = Math.sin(performance.now() * 0.0005) * 0.5
+		this.time += dt;
 	}
 
 	render(r: Renderer): void {
 		// this.drawBasic(r)
-		this.drawShapes(r)
-		// this.drawTextures(r)
+		// this.drawShapes(r)
+		this.drawTextures(r)
 		// this.drawTranslated(r)
 	}
 
@@ -88,8 +95,10 @@ class TestScene extends Scene {
 		r.setShader(this.bwShader)
 		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 200)
 
-		r.setShader(); // reset shader
-		r.drawTex(this.myTexture, 100, 100)
+		r.setShader(this.glitchShader); // reset shader
+		this.glitchShader.setUniform("Time", this.time);
+		r.setColor(...white)
+		r.drawTex(this.myTexture, 10, 70)
 	}
 
 	drawTranslated(r: Renderer): void {
