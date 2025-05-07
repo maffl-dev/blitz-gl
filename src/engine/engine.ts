@@ -2,6 +2,7 @@ import { assert, clamp } from "./utils"
 import { Renderer } from "./renderer"
 import { Scene } from "./scene"
 import { SystemManager } from "./systems"
+import { Input } from "./input"
 
 export class Engine {
 	lastTime: number = 0
@@ -11,8 +12,8 @@ export class Engine {
 
 	constructor(ren: Renderer) {
 		this.renderer = ren
-		this.systems = new SystemManager;
-		this.lastTime = performance.now();
+		this.systems = new SystemManager
+		this.lastTime = performance.now()
 		requestAnimationFrame(this.loop)
 	}
 
@@ -32,6 +33,7 @@ export class Engine {
 		this.systems.update(dt);
 		this.activeScene.update(dt)
 		this.systems.lateUpdate(dt);
+		Input.update();
 	}
 
 	render() {

@@ -2,5 +2,9 @@
 - hot reloading shaders
 
 ## Renderer
-- rect()
-- SetShader()
+- set scissor
+- draw ninepatch
+
+## Audio
+- loadSound
+- playSound

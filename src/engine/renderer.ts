@@ -1,5 +1,5 @@
 import { Color, white } from "./colors";
-import { assert, clamp, loadString, panic } from "./utils";
+import { assert, clamp, echo, loadString, panic } from "./utils";
 
 export interface Renderer {
 	// low level basics
@@ -387,7 +387,7 @@ export class WebGLRenderer implements Renderer {
 			this.gpuTimePending = true;
 		}
 
-		// console.log(this.metrics);
+		// echo(this.metrics);
 	}
 
 	// low level draw funcs (unaffected by setColor())
@@ -629,7 +629,7 @@ export class WebGLRenderer implements Renderer {
 			texture.height = image.height;
 
 			gl.generateMipmap(gl.TEXTURE_2D);
-			// console.log("loading tex:" + url + " took: " + (Date.now() - ms))
+			// echo("loading tex:" + url + " took: " + (Date.now() - ms))
 		};
 
 		image.src = url;
@@ -784,7 +784,7 @@ export class WebGLRenderer implements Renderer {
 
 	private logActiveUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): void {
 		const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-		console.log(`Active uniforms in program:`);
+		echo(`Active uniforms in program:`);
 
 		for (let i = 0; i < numUniforms; ++i) {
 			const info = gl.getActiveUniform(program, i);
@@ -794,7 +794,7 @@ export class WebGLRenderer implements Renderer {
 			const location = gl.getUniformLocation(program, name);
 			if (location) {
 				const value = gl.getUniform(program, location);
-				console.log(`${name} (${info.type}):`, value);
+				echo(`${name} (${info.type}):`, value);
 			}
 		}
 	}

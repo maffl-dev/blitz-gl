@@ -1,7 +1,8 @@
 import { Color, semiGreen, white } from "@/engine/colors";
+import { Input, Key, Mouse } from "@/engine/input";
 import { BlendMode, Texture, Renderer, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
-import { loadString } from "@/engine/utils";
+import { echo, loadString } from "@/engine/utils";
 
 class TestScene extends Scene {
 	x: number = 0.0
@@ -11,7 +12,7 @@ class TestScene extends Scene {
 	private glitchShader!: Shader;
 
 	init(r: Renderer): void {
-		console.log("init test scene");
+		echo("init test scene");
 		this.myTexture = r.loadTex("/common/test.png")
 
 		const bw = loadString("/shaders/bw.fs");
@@ -27,6 +28,34 @@ class TestScene extends Scene {
 	update(dt: number): void {
 		this.x = Math.sin(performance.now() * 0.0005) * 0.5
 		this.time += dt;
+
+		this.testInput();
+	}
+
+	testInput(): void {
+		if (Input.mouseDown(Mouse.Middle)) {
+			echo("middle mouse down");
+		}
+		if (Input.mouseHit(Mouse.Right)) {
+			echo("right mouse hit");
+		}
+		if (Input.mouseUp()) {
+			echo("left mouse up");
+		}
+
+		if (Input.keyHit(Key.A)) {
+			echo("Hit A!")
+		}
+		if (Input.keyDown(Key.A)) {
+			echo("Down A!")
+		}
+		if (Input.keyUp(Key.A)) {
+			echo("released A!")
+		}
+
+		if (Math.abs(Input.mouseWheelY()) >= 0.5) {
+			echo(Input.mouseWheelY())
+		}
 	}
 
 	render(r: Renderer): void {
@@ -96,8 +125,12 @@ class TestScene extends Scene {
 		r.setShader(this.bwShader)
 		r.drawTexRect(this.myTexture, 10, 10, 0, 0, 100, 200)
 
-		r.setShader(this.glitchShader); // reset shader
-		this.glitchShader.setUniform("Time", this.time);
+		if (Input.mouseDown()) {
+			r.setShader(this.glitchShader);
+			this.glitchShader.setUniform("Time", this.time);
+		} else {
+			r.setShader(); // reset shader
+		}
 		r.setColor(...white)
 		r.drawTex(this.myTexture, 10, 70)
 	}
