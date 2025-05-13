@@ -1,3 +1,4 @@
+import { Audio } from "./engine/audio"
 import { Engine } from "./engine/engine"
 import { Input } from "./engine/input"
 import { WebGLRenderer } from "./engine/renderer"
@@ -19,6 +20,7 @@ function main(): void {
 	gameDiv.appendChild(canvas)
 
 	Input.init(canvas)
+	Audio.init()
 
 	const renderer = new WebGLRenderer(canvas)
 	const engine = new Engine(renderer)

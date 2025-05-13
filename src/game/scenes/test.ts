@@ -1,3 +1,4 @@
+import { testSound } from "@/engine/audio";
 import { Color, semiGreen, white } from "@/engine/colors";
 import { Input, Key, Mouse } from "@/engine/input";
 import { BlendMode, Texture, Renderer, Shader } from "@/engine/renderer";
@@ -29,7 +30,8 @@ class TestScene extends Scene {
 		this.x = Math.sin(performance.now() * 0.0005) * 0.5
 		this.time += dt;
 
-		this.testInput();
+		//this.testInput();
+		this.testAudio();
 	}
 
 	testInput(): void {
@@ -58,10 +60,17 @@ class TestScene extends Scene {
 		}
 	}
 
+	testAudio(): void {
+		if (Input.keyHit(Key.Space)) {
+			testSound();
+		}
+	}
+
+
 	render(r: Renderer): void {
 		// this.drawBasic(r)
-		// this.drawShapes(r)
-		this.drawTextures(r)
+		this.drawShapes(r)
+		// this.drawTextures(r)
 		// this.drawTranslated(r)
 	}
 
