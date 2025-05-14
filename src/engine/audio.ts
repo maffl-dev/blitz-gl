@@ -118,14 +118,14 @@ export class Audio {
 	}
 
 	// Music
-	static async playMusic(url: string): Promise<void> {
+	static async playMusic(url: string, loop: boolean = true): Promise<void> {
 		if (this.preloadedTrack && url === this.preloadedUrl) {
 			this.musicPlayer.playMusic(this.preloadedTrack);
 			this.preloadedTrack = null;
 			this.preloadedUrl = "";
 			return Promise.resolve();
 		}
-		return this.musicPlayer.playMusicFromUrl(url);
+		return this.musicPlayer.playMusicFromUrl(url, loop);
 	}
 
 	static async loadMusic(url: string): Promise<void> {
@@ -149,6 +149,10 @@ export class Audio {
 
 	static seekMusic(time: number): void {
 		this.musicPlayer.seek(time);
+	}
+
+	static isMusicPlaying(): boolean {
+		return this.musicPlayer.isPlaying();
 	}
 
 	// Global
@@ -269,19 +273,20 @@ class MusicPlayer {
 		return { element, gain };
 	}
 
-	playMusic(track: MusicTrack): void {
+	playMusic(track: MusicTrack, loop: boolean = true): void {
 		const { element, gain } = track;
 		if (this.current) {
 			this.stop();
 		}
 		this.current = { element, gain };
+		element.loop = loop;
 		element.play();
 		this.context.resume();
 	}
 
-	playMusicFromUrl(url: string): Promise<void> {
+	playMusicFromUrl(url: string, loop: boolean = true): Promise<void> {
 		return this.loadMusic(url).then((track) => {
-			this.playMusic(track);
+			this.playMusic(track, loop);
 		})
 	}
 
@@ -325,15 +330,19 @@ class MusicPlayer {
 		}
 	}
 
+	isPlaying(): boolean {
+		return !!this.current && !this.current.element.paused;
+	}
+
 }
 
 
 
 // testing
 export function testSound() {
-	testSoundSimple();
+	// testSoundSimple();
 	// testMusicSound();
-	// testMusicStream();
+	testMusicStream();
 }
 
 function testSoundSimple() {
@@ -362,14 +371,16 @@ function testMusicSound() {
 function testMusicStream() {
 	if (Input.keyHit(Key.Space)) {
 		const ms = performance.now();
-		Audio.playMusic("/music/battle.ogg").then(() => {
+		Audio.playMusic("/music/battle.ogg", true).then(() => {
 			echo(performance.now() - ms)
 		})
 		// Audio.musicPlayer.fadeTo(1.0, 2.0);
 	} else if (Input.keyHit(Key.Digit1)) {
 		Audio.pauseMusic()
+		echo(Audio.isMusicPlaying())
 		// Audio.fadeMusic(0.0, 1.0);
 	} else if (Input.keyHit(Key.Digit2)) {
 		Audio.resumeMusic()
+		echo(Audio.isMusicPlaying())
 	}
 }
