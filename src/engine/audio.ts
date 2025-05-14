@@ -18,6 +18,7 @@ export enum SubmixID {
 export class Audio {
 	private static context: AudioContext;
 	private static submixes: [Submix, Submix, Submix];
+	private static soundCache: Map<string, Sound> = new Map();
 	private static musicPlayer: MusicPlayer
 	private static preloadedTrack: MusicTrack | null;
 	private static preloadedUrl: string | null = "";
@@ -33,10 +34,15 @@ export class Audio {
 
 	// Sounds
 	static async loadSound(url: string): Promise<Sound> {
+		if (this.soundCache.has(url)) {
+			return this.soundCache.get(url)!;
+		}
 		const response = await fetch(url);
 		const arrayBuffer = await response.arrayBuffer();
 		const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
-		return new Sound(audioBuffer);
+		const sound = new Sound(audioBuffer);
+		this.soundCache.set(url, sound);
+		return sound
 	}
 
 	static playSound(sound: Sound, options: SoundOptions = {}) {
@@ -134,9 +140,10 @@ export class Sound {
 
 	constructor(buffer: AudioBuffer) {
 		this.buffer = buffer;
-		echo(buffer)
 	}
+
 }
+
 
 interface MusicTrack {
 	element: HTMLAudioElement,
@@ -232,19 +239,22 @@ class MusicPlayer {
 
 
 
-
 // testing
 export function testSound() {
-	// testSoundSimple();
+	testSoundSimple();
 	// testMusicSound();
-	testMusicStream();
+	// testMusicStream();
 }
 
 function testSoundSimple() {
-	Audio.setVolume(1)
-	Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
-		Audio.playSound(sound, { rate: 1.2 })
-	})
+	if (Input.keyHit(Key.Space)) {
+		Audio.setVolume(1)
+		const ms = performance.now();
+		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+			echo(performance.now() - ms)
+			Audio.playSound(sound, { rate: 1.2 })
+		})
+	}
 }
 
 function testMusicSound() {
