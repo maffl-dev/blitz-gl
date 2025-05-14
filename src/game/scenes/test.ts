@@ -61,9 +61,7 @@ class TestScene extends Scene {
 	}
 
 	testAudio(): void {
-		if (Input.keyHit(Key.Space)) {
-			testSound();
-		}
+		testSound();
 	}
 
 
