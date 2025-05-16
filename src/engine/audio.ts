@@ -20,6 +20,8 @@ export enum SubmixID {
 	Sfx
 }
 
+type FadeType = "linear" | "target" | "exponential";
+
 export class Audio {
 	private static context: AudioContext;
 	private static submixes: [Submix, Submix, Submix];
@@ -128,14 +130,19 @@ export class Audio {
 		this.channels[channel].stop();
 	}
 
-	static pauseChannel(index: number) {
-		assertChannel(index, "pauseChannel");
-		this.channels[index].pause(this.context);
+	static pauseChannel(channel: number) {
+		assertChannel(channel, "pauseChannel");
+		this.channels[channel].pause();
 	}
 
-	static resumeChannel(index: number) {
-		assertChannel(index, "resumeChannel");
-		this.channels[index].resume(this.context);
+	static resumeChannel(channel: number) {
+		assertChannel(channel, "resumeChannel");
+		this.channels[channel].resume();
+	}
+
+	static fadeChannelTo(channel: number, value: number, duration: number, type: FadeType = "target") {
+		assertChannel(channel, "fadeChannelTo");
+		this.channels[channel].fadeTo(value, duration, type);
 	}
 
 	// Music
@@ -164,8 +171,8 @@ export class Audio {
 		this.musicPlayer.resume();
 	}
 
-	static fadeMusic(targetVolume: number, duration: number = 1.0): void {
-		this.musicPlayer.fadeTo(targetVolume, duration)
+	static fadeMusic(targetVolume: number, duration: number = 1.0, type: FadeType = "target"): void {
+		this.musicPlayer.fadeTo(targetVolume, duration, type)
 	}
 
 	static seekMusic(time: number): void {
@@ -209,6 +216,7 @@ export class Sound {
 }
 
 class Channel {
+	private context: AudioContext;
 	private gainNode: GainNode;
 	private panNode: StereoPannerNode;
 	private currentSource: AudioBufferSourceNode | null = null;
@@ -216,11 +224,13 @@ class Channel {
 	private offset: number = 0;
 	private isPaused: boolean = false;
 	private inputNode: AudioNode;
+	private fadeTimeoutId?: ReturnType<typeof setTimeout>;
 
 	private buffer: AudioBuffer | null = null;
 	private options: SoundOptions = {};
 
 	constructor(context: AudioContext, submixInput: AudioNode) {
+		this.context = context;
 		this.gainNode = context.createGain();
 		this.panNode = context.createStereoPanner();
 		this.panNode.connect(this.gainNode);
@@ -267,8 +277,8 @@ class Channel {
 		source.connect(this.inputNode);
 		source.start();
 
-		this.setVolume(volume);
 		this.setPan(pan);
+		this.setVolume(volume);
 
 		this.currentSource = source;
 		source.onended = () => {
@@ -286,11 +296,11 @@ class Channel {
 		}
 		this.offset = 0;
 		this.isPaused = false;
-		this.buffer = null;
 	}
 
-	pause(context: AudioContext): void {
+	pause(): void {
 		if (!this.currentSource || this.isPaused) return;
+		const context = this.context;
 		const elapsed = (context.currentTime - this.startTime) * (this.currentSource.playbackRate.value ?? 1);
 		const duration = this.buffer?.duration ?? 0;
 		this.offset = elapsed % duration;
@@ -300,8 +310,9 @@ class Channel {
 		this.isPaused = true;
 	}
 
-	resume(context: AudioContext): void {
+	resume(): void {
 		if (!this.buffer || !this.isPaused) return;
+		const context = this.context;
 
 		const {
 			loop = false,
@@ -357,6 +368,41 @@ class Channel {
 		this.options.detune = detune;
 	}
 
+	fadeTo(value: number, duration: number = 1, type: FadeType = "target"): void {
+		const g = this.gainNode.gain;
+		const now = this.context.currentTime;
+		g.cancelScheduledValues(now);
+
+		if (this.fadeTimeoutId) {
+			clearTimeout(this.fadeTimeoutId);
+			this.fadeTimeoutId = undefined;
+		}
+
+		switch (type) {
+			case "linear":
+				g.linearRampToValueAtTime(value, now + duration);
+				break;
+			case "exponential":
+				g.exponentialRampToValueAtTime(Math.max(value, 0.0001), now + duration);
+				break;
+			case "target":
+			default:
+				const timeConstant = duration / 5;
+				g.setTargetAtTime(value, now, timeConstant);
+				break;
+		}
+
+		this.options.volume = value;
+
+		if (value === 0 && !this.isPaused) {
+			this.fadeTimeoutId = setTimeout(() => {
+				this.pause();
+				this.fadeTimeoutId = undefined;
+			}, duration * 1000);
+		} else if (value > 0 && this.isPaused) {
+			this.resume();
+		}
+	}
 }
 
 class Submix {
@@ -462,17 +508,24 @@ class MusicPlayer {
 		}
 	}
 
-	fadeTo(value: number, duration: number = 1): void {
+	fadeTo(value: number, duration: number = 1, type: FadeType = "target"): void {
 		if (!this.current) return;
 		const g = this.current.gain.gain;
-		g.cancelScheduledValues(this.context.currentTime);
-		g.linearRampToValueAtTime(value, this.context.currentTime + duration);
+		const now = this.context.currentTime;
+		g.cancelScheduledValues(now);
+		if (type === "target") {
+			const timeConstant = duration / 5;
+			g.setTargetAtTime(value, now, timeConstant);
+		} else if (type === "linear") {
+			g.linearRampToValueAtTime(value, now + duration);
+		} else if (type === "exponential") {
+			const finalValue = Math.max(value, 0.001);
+			g.exponentialRampToValueAtTime(finalValue, now + duration);
+		}
 		if (value > 0.0) {
 			this.resume();
 		} else {
-			setTimeout(() => {
-				this.pause()
-			}, duration * 1000.0);
+			setTimeout(() => this.pause(), duration * 1000);
 		}
 	}
 
@@ -487,7 +540,8 @@ class MusicPlayer {
 // testing
 export function testSound() {
 	// testSoundSimple();
-	testSoundPanning();
+	// testSoundPanning();
+	testSoundFading();
 	// testMusicSound();
 	// testMusicStream();
 }
@@ -498,7 +552,7 @@ function testSoundSimple() {
 		const ms = performance.now();
 		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
 			echo(performance.now() - ms)
-			Audio.playSound(sound, { rate: 1.2, volume: 1.0, channel: 30, pan: -1 })
+			Audio.playSound(sound, { rate: 1.2, volume: 1.0, channel: 30 })
 
 			setTimeout(() => {
 				// Audio.setChannelVolume(30, 0.1)
@@ -527,6 +581,26 @@ function testSoundPanning() {
 	}
 }
 
+function testSoundFading() {
+	const channel = 1;
+
+	if (Input.keyHit(Key.Space)) {
+		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+			profile(() => {
+				Audio.playSound(sound, { loop: true, channel: channel });
+			})
+		})
+	}
+
+	if (Input.mouseHit(Mouse.Left)) {
+		echo("fade out")
+		Audio.fadeChannelTo(channel, 0.0, 2.0);
+	} else if (Input.mouseHit(Mouse.Right)) {
+		echo("fade in")
+		Audio.fadeChannelTo(channel, 1.0, 2.0);
+	}
+}
+
 function testMusicSound() {
 	const ms = Date.now();
 	Audio.loadSound("/music/battle.ogg").then((sound) => {
@@ -543,11 +617,12 @@ function testMusicStream() {
 		})
 		// Audio.musicPlayer.fadeTo(1.0, 2.0);
 	} else if (Input.keyHit(Key.Digit1)) {
-		Audio.pauseMusic()
+		// Audio.pauseMusic()
 		echo(Audio.isMusicPlaying())
-		// Audio.fadeMusic(0.0, 1.0);
+		Audio.fadeMusic(0.0, 1.0);
 	} else if (Input.keyHit(Key.Digit2)) {
-		Audio.resumeMusic()
+		// Audio.resumeMusic()
+		Audio.fadeMusic(1.0, 1.0)
 		echo(Audio.isMusicPlaying())
 	}
 }
