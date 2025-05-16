@@ -1,4 +1,4 @@
-import { Input, Key } from "./input";
+import { Input, Key, Mouse } from "./input";
 import { assert, echo } from "./utils";
 
 const NativeAudio = window.Audio;
@@ -9,6 +9,7 @@ export interface SoundOptions {
 	submixId?: SubmixID
 	loop?: boolean
 	rate?: number
+	pan?: number,
 	detune?: number,
 	volume?: number
 }
@@ -64,37 +65,32 @@ export class Audio {
 	}
 
 	private static playSoundInternal(sound: Sound, options: SoundOptions): void {
-		const source = this.context.createBufferSource();
-		const { channel = -1, submixId = SubmixID.Sfx, loop = false, rate = 1.0, detune = 0.0, volume = 1.0 } = options;
-		source.buffer = sound.buffer;
-		source.loop = loop;
-		source.playbackRate.value = rate;
-		source.detune.value = detune
+		const {
+			channel = -1,
+			loop = false,
+			submixId = SubmixID.Sfx,
+			volume = 1.0,
+			rate = 1.0,
+			detune = 0.0
+		} = options;
 
 		const targetInput = this.submixes[submixId].input();
 
 		if (channel >= 0) {
 			assertChannel(channel, "playSound");
-			const ch = this.channels[channel];
-			if (ch.currentSource) {
-				ch.stop();
-			}
-			source.connect(ch.inputNode);
-			source.start();
-			ch.currentSource = source;
-			ch.setVolume(volume);
-			source.onended = () => {
-				if (ch.currentSource === source) {
-					ch.currentSource = null;
-				}
-			};
+			this.channels[channel].play(this.context, sound, options);
 		} else {
-			// fire and forget sounds go directly into the mix
+			const source = this.context.createBufferSource();
+			source.buffer = sound.buffer;
+			source.loop = loop;
+			source.playbackRate.value = rate;
+			source.detune.value = detune;
+
 			if (volume < 1.0) {
 				const gainNode = this.context.createGain();
 				gainNode.gain.value = volume;
 				source.connect(gainNode);
-				gainNode.connect(targetInput)
+				gainNode.connect(targetInput);
 				source.start();
 				source.onended = () => {
 					source.disconnect();
@@ -112,9 +108,34 @@ export class Audio {
 		this.channels[channel].setVolume(volume);
 	}
 
+	static setChannelPan(channel: number, pan: number) {
+		assertChannel(channel, "setChannelPan");
+		this.channels[channel].setPan(pan);
+	}
+
+	static setChannelRate(channel: number, rate: number) {
+		assertChannel(channel, "setChannelRate");
+		this.channels[channel].setRate(rate);
+	}
+
+	static setChannelDetune(channel: number, detune: number) {
+		assertChannel(channel, "setChannelDetune");
+		this.channels[channel].setDetune(detune);
+	}
+
 	static stopChannel(channel: number) {
 		assertChannel(channel, "stopChannel");
 		this.channels[channel].stop();
+	}
+
+	static pauseChannel(index: number) {
+		assertChannel(index, "pauseChannel");
+		this.channels[index].pause(this.context);
+	}
+
+	static resumeChannel(index: number) {
+		assertChannel(index, "resumeChannel");
+		this.channels[index].resume(this.context);
 	}
 
 	// Music
@@ -188,29 +209,154 @@ export class Sound {
 }
 
 class Channel {
-	gainNode: GainNode;
-	currentSource: AudioBufferSourceNode | null = null;
-	readonly inputNode: AudioNode;
+	private gainNode: GainNode;
+	private panNode: StereoPannerNode;
+	private currentSource: AudioBufferSourceNode | null = null;
+	private startTime: number = 0;
+	private offset: number = 0;
+	private isPaused: boolean = false;
+	private inputNode: AudioNode;
+
+	private buffer: AudioBuffer | null = null;
+	private options: SoundOptions = {};
 
 	constructor(context: AudioContext, submixInput: AudioNode) {
 		this.gainNode = context.createGain();
+		this.panNode = context.createStereoPanner();
+		this.panNode.connect(this.gainNode);
 		this.gainNode.connect(submixInput);
-		this.inputNode = this.gainNode;
+		this.inputNode = this.panNode;
 	}
 
-	setVolume(volume: number) {
-		this.gainNode.gain.value = volume;
+	getInput(): AudioNode {
+		return this.inputNode;
 	}
 
-	stop() {
+	play(context: AudioContext, sound: Sound, options: SoundOptions): void {
+		this.stop();
+
+		const {
+			loop = false,
+			rate = 1.0,
+			detune = 0.0,
+			pan = 0.0,
+			volume = 1.0
+		} = options;
+
+		const source = context.createBufferSource();
+		const buffer = sound.buffer;
+		let finalBuffer = buffer;
+		if (buffer.numberOfChannels === 1) {
+			const stereoBuffer = context.createBuffer(2, buffer.length, buffer.sampleRate);
+			const monoData = buffer.getChannelData(0);
+			stereoBuffer.copyToChannel(monoData, 0);
+			stereoBuffer.copyToChannel(monoData, 1);
+			finalBuffer = stereoBuffer;
+		}
+		source.buffer = finalBuffer;
+		source.loop = loop;
+		source.playbackRate.value = rate;
+		source.detune.value = detune;
+
+		this.buffer = finalBuffer;
+		this.options = options;
+		this.offset = 0;
+		this.startTime = context.currentTime;
+		this.isPaused = false;
+
+		source.connect(this.inputNode);
+		source.start();
+
+		this.setVolume(volume);
+		this.setPan(pan);
+
+		this.currentSource = source;
+		source.onended = () => {
+			if (this.currentSource === source) {
+				this.currentSource = null;
+			}
+		};
+	}
+
+	stop(): void {
 		if (this.currentSource) {
-			try {
-				this.currentSource.stop();
-			} catch { }
+			try { this.currentSource.stop(); } catch { }
 			this.currentSource.disconnect();
 			this.currentSource = null;
 		}
+		this.offset = 0;
+		this.isPaused = false;
+		this.buffer = null;
 	}
+
+	pause(context: AudioContext): void {
+		if (!this.currentSource || this.isPaused) return;
+		const elapsed = (context.currentTime - this.startTime) * (this.currentSource.playbackRate.value ?? 1);
+		const duration = this.buffer?.duration ?? 0;
+		this.offset = elapsed % duration;
+		this.currentSource.stop();
+		this.currentSource.disconnect();
+		this.currentSource = null;
+		this.isPaused = true;
+	}
+
+	resume(context: AudioContext): void {
+		if (!this.buffer || !this.isPaused) return;
+
+		const {
+			loop = false,
+			rate = 1.0,
+			detune = 0.0,
+			volume = 1.0,
+			pan = 0.0
+		} = this.options;
+
+		const offset = Math.min(this.offset, this.buffer.duration);
+		const source = context.createBufferSource();
+		source.buffer = this.buffer;
+		source.loop = loop;
+		source.playbackRate.value = rate;
+		source.detune.value = detune;
+		source.connect(this.inputNode);
+		source.start(0, offset);
+
+		this.startTime = context.currentTime - offset;
+		this.currentSource = source;
+		this.isPaused = false;
+
+		// Apply volume and pan explicitly
+		this.setVolume(volume);
+		this.setPan(pan);
+
+		source.onended = () => {
+			if (this.currentSource === source) this.currentSource = null;
+		};
+	}
+
+	setVolume(volume: number): void {
+		this.gainNode.gain.value = volume;
+		this.options.volume = volume;
+	}
+
+	setRate(rate: number): void {
+		if (this.currentSource) {
+			this.currentSource.playbackRate.value = rate;
+		}
+		this.options.rate = rate;
+	}
+
+	setPan(pan: number): void {
+		this.panNode.pan.value = pan;
+		this.options.pan = pan;
+	}
+
+	setDetune(detune: number): void {
+		if (this.currentSource) {
+			this.currentSource.detune.value = detune;
+		}
+		this.options.detune = detune;
+	}
+
 }
 
 class Submix {
@@ -341,8 +487,9 @@ class MusicPlayer {
 // testing
 export function testSound() {
 	// testSoundSimple();
+	testSoundPanning();
 	// testMusicSound();
-	testMusicStream();
+	// testMusicStream();
 }
 
 function testSoundSimple() {
@@ -351,12 +498,30 @@ function testSoundSimple() {
 		const ms = performance.now();
 		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
 			echo(performance.now() - ms)
-			Audio.playSound(sound, { rate: 1.2, volume: 1.0, channel: 30 })
+			Audio.playSound(sound, { rate: 1.2, volume: 1.0, channel: 30, pan: -1 })
 
 			setTimeout(() => {
-				Audio.setChannelVolume(30, 0.1)
+				// Audio.setChannelVolume(30, 0.1)
 			}, 150);
 		})
+	}
+}
+
+function testSoundPanning() {
+	const channel = 1;
+
+	if (Input.keyHit(Key.Space)) {
+		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+			Audio.playSound(sound, { loop: true, channel: channel });
+		})
+	}
+
+	if (Input.mouseHit(Mouse.Left)) {
+		echo("pan left")
+		Audio.setChannelPan(channel, -1);
+	} else if (Input.mouseHit(Mouse.Right)) {
+		echo("pan right")
+		Audio.setChannelPan(channel, 1);
 	}
 }
 
