@@ -88,7 +88,7 @@ export class Audio {
 
 			if (volume < 1.0) {
 				const gainNode = this.context.createGain();
-				gainNode.gain.value = volume;
+				gainNode.gain.setValueAtTime(volume, this.context.currentTime)
 				source.connect(gainNode);
 				gainNode.connect(targetInput);
 				source.start();
@@ -334,7 +334,7 @@ class Channel {
 	}
 
 	setVolume(volume: number): void {
-		this.gainNode.gain.value = volume;
+		this.gainNode.gain.setValueAtTime(volume, this.gainNode.context.currentTime);
 		this.options.volume = volume;
 	}
 
