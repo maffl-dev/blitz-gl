@@ -20,7 +20,9 @@ export enum SubmixID {
 	Sfx
 }
 
-type FadeType = "linear" | "target" | "exponential";
+export type FadeType = "linear" | "target" | "exponential";
+export type ChannelState = "stopped" | "paused" | "playing";
+
 
 export class Audio {
 	private static context: AudioContext;
@@ -143,6 +145,11 @@ export class Audio {
 	static fadeChannelTo(channel: number, value: number, duration: number, type: FadeType = "target") {
 		assertChannel(channel, "fadeChannelTo");
 		this.channels[channel].fadeTo(value, duration, type);
+	}
+
+	static channelState(channel: number): ChannelState {
+		assertChannel(channel, "channelState");
+		return this.channels[channel].getState();
 	}
 
 	// Music
@@ -403,6 +410,15 @@ class Channel {
 			this.resume();
 		}
 	}
+
+	getState(): ChannelState {
+		if (this.isPaused) {
+			return "paused";
+		} else if (this.currentSource) {
+			return "playing";
+		}
+		return "stopped";
+	}
 }
 
 class Submix {
@@ -585,6 +601,7 @@ function testSoundFading() {
 	const channel = 1;
 
 	if (Input.keyHit(Key.Space)) {
+		echo(Audio.channelState(channel))
 		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
 			profile(() => {
 				Audio.playSound(sound, { loop: true, channel: channel });
@@ -593,10 +610,10 @@ function testSoundFading() {
 	}
 
 	if (Input.mouseHit(Mouse.Left)) {
-		echo("fade out")
+		echo("fade out", Audio.channelState(channel))
 		Audio.fadeChannelTo(channel, 0.0, 2.0);
 	} else if (Input.mouseHit(Mouse.Right)) {
-		echo("fade in")
+		echo("fade in", Audio.channelState(channel))
 		Audio.fadeChannelTo(channel, 1.0, 2.0);
 	}
 }
