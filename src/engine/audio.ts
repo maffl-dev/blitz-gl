@@ -1,5 +1,5 @@
 import { Input, Key, Mouse } from "./input";
-import { assert, echo } from "./utils";
+import { assert, echo, profile } from "./utils";
 
 const NativeAudio = window.Audio;
 const AUDIO_MAX_CHANNELS: number = 32;
@@ -512,7 +512,9 @@ function testSoundPanning() {
 
 	if (Input.keyHit(Key.Space)) {
 		Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
-			Audio.playSound(sound, { loop: true, channel: channel });
+			profile(() => {
+				Audio.playSound(sound, { loop: true, channel: channel });
+			})
 		})
 	}
 
