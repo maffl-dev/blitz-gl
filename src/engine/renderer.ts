@@ -64,6 +64,13 @@ export interface Renderer {
 	createFragShader(fs: string): Shader;
 	createShader(vs: string, fs: string): Shader;
 
+	// render targets
+	createRenderTarget(width: number, height: number): RenderTarget
+	setRenderTarget(rt?: RenderTarget): void
+	drawRenderTarget(rt: RenderTarget, x: number, y: number): void
+	clearRenderTarget(color?: Color): void
+	destroyRenderTarget(rt: RenderTarget): void
+
 	// other
 	getMetrics(): Readonly<RenderMetrics>
 
@@ -123,6 +130,12 @@ export class Texture {
 	}
 }
 
+export interface RenderTarget {
+	texture: Texture;
+	framebuffer: WebGLFramebuffer;
+	width: number;
+	height: number;
+}
 
 export class Shader {
 	private gl: WebGL2RenderingContext
@@ -259,6 +272,7 @@ export class WebGLRenderer implements Renderer {
 		tx: 0, ty: 0
 	};
 	private transformStack: Array<RenderTransform> = []
+	private currentRenderTarget: RenderTarget | null = null;
 
 	// metrics
 	private metrics: RenderMetrics = {
@@ -338,7 +352,7 @@ export class WebGLRenderer implements Renderer {
 			gl.beginQuery(ext.TIME_ELAPSED_EXT, this.gpuQuery);
 		}
 
-		gl.viewport(0, 0, this.viewportWidth, this.viewportHeight);
+		this.setRenderTarget();
 		gl.clearColor(...clearColor);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -766,6 +780,88 @@ export class WebGLRenderer implements Renderer {
 		return shader
 	}
 
+	// render target
+	createRenderTarget(width: number, height: number): RenderTarget {
+		const gl = this.gl;
+		const texture = new Texture(gl);
+		texture.width = width;
+		texture.height = height;
+
+		gl.bindTexture(gl.TEXTURE_2D, texture.data);
+		gl.texImage2D(
+			gl.TEXTURE_2D,
+			0,
+			gl.RGBA,
+			width,
+			height,
+			0,
+			gl.RGBA,
+			gl.UNSIGNED_BYTE,
+			null
+		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+		const framebuffer = gl.createFramebuffer();
+		gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture.data, 0);
+
+		if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+			panic("Framebuffer is incomplete");
+		}
+
+		// Cleanup
+		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+
+		return {
+			texture,
+			framebuffer,
+			width,
+			height
+		};
+	}
+
+	setRenderTarget(rt?: RenderTarget): void {
+		const gl = this.gl;
+		this.flush();
+		if (rt) {
+			gl.bindFramebuffer(gl.FRAMEBUFFER, rt.framebuffer);
+			gl.viewport(0, 0, rt.texture.width, rt.texture.height);
+			this.currentRenderTarget = rt;
+			this.currentShader.setUniform("Resolution", [rt.width, rt.height]);
+		} else {
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.viewport(0, 0, this.viewportWidth, this.viewportHeight);
+			this.currentRenderTarget = null;
+			this.currentShader.setUniform("Resolution", [this.viewportWidth, this.viewportHeight]);
+		}
+	}
+
+	drawRenderTarget(rt: RenderTarget, x: number, y: number): void {
+		this.push();
+		this.scale(1, -1);
+		this.drawTex(rt.texture, x, -y - rt.height);
+		this.pop();
+	}
+
+	clearRenderTarget(color: Color = [0.0, 0.0, 0.0, 0.0]): void {
+		const gl = this.gl;
+		if (!this.currentRenderTarget) return;
+		gl.clearColor(...color);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+	}
+
+	destroyRenderTarget(rt: RenderTarget): void {
+		const gl = this.gl;
+		gl.deleteFramebuffer(rt.framebuffer);
+		gl.deleteTexture(rt.texture.data);
+	}
+
+
+
 
 	// other
 	getMetrics(): Readonly<RenderMetrics> {
@@ -780,6 +876,12 @@ export class WebGLRenderer implements Renderer {
 		this.viewportHeight = height;
 		gl.viewport(0, 0, width, height);
 		shader.setUniform("Resolution", [width, height])
+	}
+
+	private renderTargetHeight(): number {
+		return this.currentRenderTarget
+			? this.currentRenderTarget.height
+			: this.viewportHeight;
 	}
 
 	private logActiveUniforms(gl: WebGL2RenderingContext, program: WebGLProgram): void {

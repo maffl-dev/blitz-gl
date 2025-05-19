@@ -1,7 +1,7 @@
 import { testSound } from "@/engine/audio";
-import { Color, semiGreen, white } from "@/engine/colors";
+import { Color, red, semiGreen, white } from "@/engine/colors";
 import { Input, Key, Mouse } from "@/engine/input";
-import { BlendMode, Texture, Renderer, Shader } from "@/engine/renderer";
+import { BlendMode, Texture, Renderer, Shader, RenderTarget } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 import { echo, loadString } from "@/engine/utils";
 
@@ -67,9 +67,10 @@ class TestScene extends Scene {
 
 	render(r: Renderer): void {
 		// this.drawBasic(r)
-		this.drawShapes(r)
+		// this.drawShapes(r)
 		// this.drawTextures(r)
 		// this.drawTranslated(r)
+		this.drawToTexture(r);
 	}
 
 	clearColor(): Color {
@@ -112,7 +113,7 @@ class TestScene extends Scene {
 		r.drawTri(20, 10, 30, 30, 40, 10)
 
 		r.setColor(0.3, 0.3, 0.3, 0.5)
-		r.drawRect(60, 20, 100, 30)
+		r.drawRect(10, 20, 100, 30)
 
 		r.setColor(1.0, 0.0, 0.0, 0.5)
 		r.drawCircle(50, 90, 25)
@@ -162,6 +163,40 @@ class TestScene extends Scene {
 		}
 		r.pop()
 	}
+
+	private rt!: RenderTarget
+	drawToTexture(r: Renderer): void {
+		// Allocate a render target texture (once, ideally cache it)
+		if (!this.rt) {
+			this.rt = r.createRenderTarget(150, 150);
+		}
+
+		// Bind the target for offscreen rendering
+		r.setRenderTarget(this.rt);
+		r.clearRenderTarget()
+
+		// Draw something into the texture
+		r.setColor(1, 1, 0, 1);
+		r.drawCircle(64, 64, 64);
+		r.setColor(1, 0, 0, 1.0);
+		r.drawRect(10, 0, 10, 10);
+
+		// Back to screen
+		r.setRenderTarget();
+
+		// Draw the result texture on screen
+		r.setColor(1, 1, 1, 1);
+		r.push()
+		r.translate(10, 50)
+		r.setShader(this.bwShader)
+		r.drawRenderTarget(this.rt, this.time * 30.0, 0);
+		r.pop()
+
+		r.setShader()
+		r.setColor(0, 0, 1);
+		r.drawRect(0, 10, 10, 10);
+	}
+
 
 }
 

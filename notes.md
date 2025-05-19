@@ -3,7 +3,6 @@
 - tilemap
 
 ## Renderer
-- framebuffer / render target
 - shadow mask pass
 - fog
 - dynamic light sources
