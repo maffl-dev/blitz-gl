@@ -142,15 +142,16 @@ export class Audio {
 		this.channels[channel].resume();
 	}
 
+	static channelState(channel: number): ChannelState {
+		assertChannel(channel, "channelState");
+		return this.channels[channel].getState();
+	}
+
 	static fadeChannelTo(channel: number, value: number, duration: number, type: FadeType = "target") {
 		assertChannel(channel, "fadeChannelTo");
 		this.channels[channel].fadeTo(value, duration, type);
 	}
 
-	static channelState(channel: number): ChannelState {
-		assertChannel(channel, "channelState");
-		return this.channels[channel].getState();
-	}
 
 	// Music
 	static async playMusic(url: string, loop: boolean = true): Promise<void> {

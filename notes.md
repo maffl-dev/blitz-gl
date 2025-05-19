@@ -1,10 +1,14 @@
 ## General
-- hot reloading shaders
+- tiles
+- tilemap
 
 ## Renderer
+- framebuffer / render target
+- shadow mask pass
+- fog
+- dynamic light sources
 - set scissor
-- draw ninepatch
 
 ## Audio
-- loadSound
-- playSound
+- submix effects
+- channel effects
