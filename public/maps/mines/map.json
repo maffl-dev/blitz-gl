@@ -1,0 +1,89 @@
+{
+	"MapInfo": {
+		"width": 17,
+		"height": 11,
+		"tilesize": 40,
+		"start_x": 8,
+		"start_y": 1,
+		"layers": 10,
+		"objects": 4,
+		"pics_bottom": 0,
+		"pics_top": 1,
+		"particles": 1,
+		"particles_below": 0,
+		"swarms": 0,
+		"butterflies": 0,
+		"butterflyBounds": [
+			0,
+			0,
+			0,
+			0
+		],
+		"use_bw": false,
+		"bw_level": 1.0,
+		"use_invert": false,
+		"use_color_weight": true,
+		"color_weight_r": 1,
+		"color_weight_g": 0.85,
+		"color_weight_b": 1,
+		"music": "mines",
+		"music_volume": 0.8,
+		"dark_area": false,
+		"fog": false,
+		"darkness": 50,
+		"lightsize": 1,
+		"color_temperature_r": 0.61,
+		"color_temperature_g": 0.4,
+		"color_temperature_b": 0,
+		"picture_map": false,
+		"dialogues": "t_mines_diary2",
+		"rle": 1
+	},
+	"Layer1": {
+		"layer_type": "autotiles",
+		"tileset_path": "tilesets/autotiles.png",
+		"data": "x24 28 x3 17 x14 28 x3 17 x9 28 x8 17 x9 28 x8 17 x9 28 x8 17 x9 28 x8 17 x9 28 x7 17 x59 28"
+	},
+	"Layer2": {
+		"layer_type": "collision",
+		"data": "x8 0 15 x15 0 15 0 15 x13 0 x2 15 0 x2 15 x12 0 15 x3 0 15 x7 0 x6 15 x3 0 15 x7 0 15 x8 0 15 x7 0 15 x8 0 15 x7 0 15 x7 0 x2 15 x8 0 x8 15 x41 0"
+	},
+	"Layer3": {
+		"layer_type": "collision",
+		"data": "x187 0"
+	},
+	"Layer4": {
+		"layer_type": "zone",
+		"data": "x25 0 15 x16 0 15 x144 0"
+	},
+	"Layer5": {
+		"layer_type": "normal",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x24 -1 54 283 52 x14 -1 79 308 77 x9 -1 65 53 66 67 54 104 333 102 x9 -1 x2 78 91 78 79 x12 -1 x2 103 116 103 104 x95 -1"
+	},
+	"Layer6": {
+		"layer_type": "normal",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x58 -1 100 x29 -1 100 x38 -1 125 x59 -1"
+	},
+	"Layer7": {
+		"layer_type": "normal",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x187 -1"
+	},
+	"Layer8": {
+		"layer_type": "normal_top",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x8 -1 140 x102 -1 130 156 x7 -1 155 x7 131 156 0 x7 -1 0 x7 -1 0 x11 -1 0 x3 -1 0 x25 -1"
+	},
+	"Layer9": {
+		"layer_type": "normal_top",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x187 -1"
+	},
+	"Layer10": {
+		"layer_type": "normal_top",
+		"tileset_path": "tilesets/cave.png",
+		"data": "x187 -1"
+	}
+}

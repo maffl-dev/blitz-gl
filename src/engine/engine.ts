@@ -31,7 +31,9 @@ export class Engine {
 	update(dt: number) {
 		assert(this.activeScene, "Engine.update: no active scene!")
 		this.systems.update(dt);
-		this.activeScene.update(dt)
+		if (this.activeScene.loaded) {
+			this.activeScene.update(dt)
+		}
 		this.systems.lateUpdate(dt);
 		Input.update();
 	}
@@ -39,16 +41,19 @@ export class Engine {
 	render() {
 		assert(this.activeScene, "Engine.render: no active scene!")
 		this.renderer.beginFrame(this.activeScene.clearColor())
-		this.activeScene.render(this.renderer)
+		if (this.activeScene.loaded) {
+			this.activeScene.render(this.renderer)
+		}
 		this.systems.render(this.renderer);
 		this.renderer.endFrame()
 	}
 
-	changeScene(newScene: Scene) {
+	async changeScene(newScene: Scene) {
 		if (this.activeScene) {
 			this.activeScene.onExit(newScene)
 		}
 		this.activeScene = newScene
-		newScene.init(this.renderer)
+		await newScene.init(this.renderer)
+		newScene.loaded = true;
 	}
 }

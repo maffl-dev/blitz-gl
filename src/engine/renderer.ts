@@ -45,7 +45,7 @@ export interface Renderer {
 	drawRect(x: number, y: number, w: number, h: number): void
 
 	// textures
-	loadTex(url: string): Texture
+	loadTex(url: string): Promise<Texture>
 	drawTex(tex: Texture, x: number, y: number): void
 	drawTexRect(tex: Texture, x: number, y: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
@@ -243,7 +243,7 @@ export class WebGLRenderer implements Renderer {
 	private viewportHeight!: number;
 	private gl: WebGL2RenderingContext;
 
-	private readonly MAX_TRIANGLES = 1024;
+	private readonly MAX_TRIANGLES = 8192;
 	private readonly VERTEX_SIZE = 8; // 2 for position, 4 for color, 2 for uv
 	private readonly MAX_TRANSFORM_STACK_DEPTH = 256;
 	private readonly MAX_TEXTURE_SIZE = 4096;
@@ -410,6 +410,14 @@ export class WebGLRenderer implements Renderer {
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
 	): void {
+		if ((this.vertexCount + 3) * this.VERTEX_SIZE > this.vertexData.length) {
+			this.flush();
+		}
+		if (this.currentTexture !== this.fallbackTexture) {
+			this.flush();
+			this.currentTexture = this.fallbackTexture;
+			this.currentTexture.bind();
+		}
 		const t = this.currentTransform;
 		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
 		const ty1 = x1 * t.iy + y1 * t.jy + t.ty;
@@ -417,11 +425,6 @@ export class WebGLRenderer implements Renderer {
 		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
 		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
 		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
-		if (this.currentTexture !== this.fallbackTexture) {
-			this.flush();
-			this.currentTexture = this.fallbackTexture;
-			this.currentTexture.bind();
-		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([tx1, ty1, r1, g1, b1, a1, 0.0, 0.0], base);
 		this.vertexData.set([tx2, ty2, r2, g2, b2, a2, 0.0, 0.0], base + this.VERTEX_SIZE);
@@ -435,6 +438,14 @@ export class WebGLRenderer implements Renderer {
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number, u2: number, v2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number, u3: number, v3: number
 	): void {
+		if ((this.vertexCount + 3) * this.VERTEX_SIZE > this.vertexData.length) {
+			this.flush();
+		}
+		if (this.currentTexture !== tex) {
+			this.flush();
+			this.currentTexture = tex;
+			this.currentTexture.bind();
+		}
 		const t = this.currentTransform;
 		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
 		const ty1 = x1 * t.iy + y1 * t.jy + t.ty;
@@ -442,11 +453,6 @@ export class WebGLRenderer implements Renderer {
 		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
 		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
 		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
-		if (this.currentTexture !== tex) {
-			this.flush();
-			this.currentTexture = tex;
-			this.currentTexture.bind();
-		}
 		const base = this.vertexCount * this.VERTEX_SIZE;
 		this.vertexData.set([
 			tx1, ty1, r1, g1, b1, a1, u1, 1.0 - v1,
@@ -591,7 +597,7 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	// textures
-	loadTex(url: string): Texture {
+	loadTex(url: string): Promise<Texture> {
 		const gl = this.gl;
 		const texture = new Texture(gl);
 		texture.bind(0);
@@ -605,49 +611,49 @@ export class WebGLRenderer implements Renderer {
 		// Placeholder 1x1 white pixel
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.whitePixel);
 
-		// const ms = Date.now();
+		return new Promise((resolve, reject) => {
+			const image = new Image();
+			image.crossOrigin = "anonymous";
 
-		const image = new Image();
-		image.crossOrigin = "anonymous";
-		image.onload = () => {
-			texture.bind(0);
-			assert(
-				image.width < this.MAX_TEXTURE_SIZE && image.height < this.MAX_TEXTURE_SIZE,
-				"Max texture size (" + this.MAX_TEXTURE_SIZE + ") exceeded: " + url
-			);
-			// Draw image into canvas
-			const ctx = this.premultiplyContext;
-			ctx.clearRect(0, 0, image.width, image.height);
-			ctx.drawImage(image, 0, 0);
+			image.onload = () => {
+				texture.bind(0);
+				assert(
+					image.width < this.MAX_TEXTURE_SIZE && image.height < this.MAX_TEXTURE_SIZE,
+					"Max texture size (" + this.MAX_TEXTURE_SIZE + ") exceeded: " + url
+				);
+				// Draw image into canvas
+				const ctx = this.premultiplyContext;
+				ctx.clearRect(0, 0, image.width, image.height);
+				ctx.drawImage(image, 0, 0);
 
-			// Get pixel data
-			const imageData = ctx.getImageData(0, 0, image.width, image.height);
-			const data = imageData.data;
+				// Get pixel data
+				const imageData = ctx.getImageData(0, 0, image.width, image.height);
+				const data = imageData.data;
 
-			// Premultiply alpha
-			for (let i = 0; i < data.length; i += 4) {
-				const alpha = data[i + 3] / 255;
-				data[i + 0] = Math.round(data[i + 0] * alpha);
-				data[i + 1] = Math.round(data[i + 1] * alpha);
-				data[i + 2] = Math.round(data[i + 2] * alpha);
-				// data[i + 3] stays the same
-			}
+				// Premultiply alpha
+				for (let i = 0; i < data.length; i += 4) {
+					const alpha = data[i + 3] / 255;
+					data[i + 0] = Math.round(data[i + 0] * alpha);
+					data[i + 1] = Math.round(data[i + 1] * alpha);
+					data[i + 2] = Math.round(data[i + 2] * alpha);
+					// data[i + 3] stays the same
+				}
 
-			// Upload to GPU
-			gl.texImage2D(
-				gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0,
-				gl.RGBA, gl.UNSIGNED_BYTE, data
-			);
+				// Upload to GPU
+				gl.texImage2D(
+					gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0,
+					gl.RGBA, gl.UNSIGNED_BYTE, data
+				);
 
-			texture.width = image.width;
-			texture.height = image.height;
+				texture.width = image.width;
+				texture.height = image.height;
 
-			gl.generateMipmap(gl.TEXTURE_2D);
-			// echo("loading tex:" + url + " took: " + (Date.now() - ms))
-		};
-
-		image.src = url;
-		return texture;
+				gl.generateMipmap(gl.TEXTURE_2D);
+				resolve(texture);
+			};
+			image.onerror = () => reject(new Error("Failed to load texture: " + url));
+			image.src = url;
+		});
 	}
 
 	drawTex(tex: Texture, x: number = 0.0, y: number = 0.0): void {

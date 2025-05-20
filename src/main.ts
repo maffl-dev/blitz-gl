@@ -4,15 +4,15 @@ import { Input } from "./engine/input"
 import { WebGLRenderer } from "./engine/renderer"
 import { DebugStats } from "./engine/systems/debug_stats"
 import { TestScene } from "./game/scenes/test"
+import { Tilemap } from "./game/scenes/tilemap"
 
-const TILESIZE: number = 20
 const SCREEN_WIDTH: number = 340
 const SCREEN_HEIGHT: number = 220
 
 // start!
 main();
 
-function main(): void {
+function main() {
 	const canvas: HTMLCanvasElement = document.createElement("canvas") as HTMLCanvasElement
 	canvas.width = SCREEN_WIDTH
 	canvas.height = SCREEN_HEIGHT
@@ -25,5 +25,5 @@ function main(): void {
 	const renderer = new WebGLRenderer(canvas)
 	const engine = new Engine(renderer)
 	// engine.systems.add(new DebugStats)
-	engine.changeScene(new TestScene)
+	engine.changeScene(new Tilemap)
 }
