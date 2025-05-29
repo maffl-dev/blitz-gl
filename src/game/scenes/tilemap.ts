@@ -1,8 +1,9 @@
 import { Color, white } from "@/engine/colors";
-import { Texture, Renderer } from "@/engine/renderer";
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from "@/engine/config";
+import { Texture, Renderer, RenderTarget, BlendMode, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 import { Autotile, calcMinitiles, createAutotilesFromTexture, TileID, TileLayer, TILESIZE, unpackMinitiles } from "@/engine/tiles";
-import { echo, panic } from "@/engine/utils";
+import { echo, loadString, panic } from "@/engine/utils";
 
 class Tilemap extends Scene {
 	time: number = 0.0;
@@ -12,9 +13,27 @@ class Tilemap extends Scene {
 	texAutotiles!: Texture
 	texTiles!: Texture
 
+	lightRenderTarget!: RenderTarget
+	lights!: Light[]
+	lightShader!: Shader;
+
 	async init(r: Renderer): Promise<void> {
 		echo("init tilemap");
 
+		// lights
+		this.lightRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
+		this.lights = new Array(20)
+		for (let i = 0; i < this.lights.length; i++) {
+			this.lights[i] = {
+				x: 0,
+				y: 0,
+				radius: 0,
+				color: white,
+			}
+		}
+		this.lightShader = r.createFragShader(loadString("shaders/light.fs"))
+
+		// map
 		this.texAutotiles = await r.loadTex("tilesets/autotiles.png")
 		this.texTiles = await r.loadTex("tilesets/cave.png")
 		this.initMap();
@@ -38,6 +57,26 @@ class Tilemap extends Scene {
 		this.layers[6].decodeRLE("x187 -1")
 
 		this.autotiles = createAutotilesFromTexture(this.texAutotiles);
+
+		// lights
+		this.lights[0] = {
+			x: 170,
+			y: 30,
+			color: [1, 1, 1, 0.8],
+			radius: 40
+		}
+		this.lights[1] = {
+			x: 50,
+			y: 50,
+			color: [1, 1, 1, 1.0],
+			radius: 70
+		}
+		this.lights[2] = {
+			x: 184,
+			y: 140,
+			color: [1, 1, 1, 0.5],
+			radius: 80
+		}
 	}
 
 	update(dt: number): void {
@@ -45,6 +84,10 @@ class Tilemap extends Scene {
 	}
 
 	render(r: Renderer): void {
+		// map
+		r.setRenderTarget()
+		r.setBlendmode(BlendMode.Alpha)
+		r.setShader()
 		r.setColor(...white)
 		for (let i = 0; i < this.layers.length; i++) {
 			const layer = this.layers[i]
@@ -54,6 +97,29 @@ class Tilemap extends Scene {
 				this.drawLayer(r, layer, this.texTiles)
 			}
 		}
+
+		// lightmap
+		const ambient = 0.3;
+		r.setRenderTarget(this.lightRenderTarget)
+		r.clearRenderTarget([ambient, ambient, ambient, 1.0])
+		r.setBlendmode(BlendMode.Additive)
+		r.setShader(this.lightShader)
+		this.lightShader.setUniform("Resolution", [SCREEN_WIDTH, SCREEN_HEIGHT])
+		for (const light of this.lights) {
+			const color = light.color;
+			if (light.radius > 0.0) {
+				this.lightShader.setUniform("LightPos", [light.x, light.y])
+				this.lightShader.setUniform("Radius", light.radius)
+				r.setColor(...color)
+				r.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+				r.flush();
+			}
+		}
+		r.setRenderTarget()
+		r.setBlendmode(BlendMode.Multiply)
+		r.setShader()
+		r.setColor(...white)
+		r.drawRenderTarget(this.lightRenderTarget, 0, 0)
 	}
 
 	drawLayer(r: Renderer, layer: TileLayer, tileset: Texture): void {
@@ -126,6 +192,14 @@ class Tilemap extends Scene {
 		return [0.2, 0.2, 0.2, 1.0]
 	}
 
+}
+
+
+interface Light {
+	x: number;
+	y: number;
+	radius: number;
+	color: Color;
 }
 
 

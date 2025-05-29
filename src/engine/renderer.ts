@@ -193,7 +193,7 @@ export class Shader {
 				case 4: this.gl.uniform4fv(location, value); break;
 				case 9: this.gl.uniformMatrix3fv(location, false, value); break;
 				case 16: this.gl.uniformMatrix4fv(location, false, value); break;
-				default: panic(`Unsupported uniform array length: ${value.length}`);
+				default: panic(`setUnfiorm ${name}. Unsupported uniform array length: ${value.length}`);
 			}
 		}
 
@@ -410,27 +410,28 @@ export class WebGLRenderer implements Renderer {
 		x2: number, y2: number, r2: number, g2: number, b2: number, a2: number,
 		x3: number, y3: number, r3: number, g3: number, b3: number, a3: number
 	): void {
-		if ((this.vertexCount + 3) * this.VERTEX_SIZE > this.vertexData.length) {
-			this.flush();
-		}
-		if (this.currentTexture !== this.fallbackTexture) {
-			this.flush();
-			this.currentTexture = this.fallbackTexture;
-			this.currentTexture.bind();
-		}
-		const t = this.currentTransform;
-		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
-		const ty1 = x1 * t.iy + y1 * t.jy + t.ty;
-		const tx2 = x2 * t.ix + y2 * t.jx + t.tx;
-		const ty2 = x2 * t.iy + y2 * t.jy + t.ty;
-		const tx3 = x3 * t.ix + y3 * t.jx + t.tx;
-		const ty3 = x3 * t.iy + y3 * t.jy + t.ty;
-		const base = this.vertexCount * this.VERTEX_SIZE;
-		this.vertexData.set([tx1, ty1, r1, g1, b1, a1, 0.0, 0.0], base);
-		this.vertexData.set([tx2, ty2, r2, g2, b2, a2, 0.0, 0.0], base + this.VERTEX_SIZE);
-		this.vertexData.set([tx3, ty3, r3, g3, b3, a3, 0.0, 0.0], base + this.VERTEX_SIZE * 2);
-		this.vertexCount += 3;
+		const minX = Math.min(x1, x2, x3);
+		const minY = Math.min(y1, y2, y3);
+		const maxX = Math.max(x1, x2, x3);
+		const maxY = Math.max(y1, y2, y3);
+		const w = maxX - minX || 1.0;
+		const h = maxY - minY || 1.0;
+
+		const u1 = (x1 - minX) / w;
+		const v1 = 1.0 - (y1 - minY) / h;
+		const u2 = (x2 - minX) / w;
+		const v2 = 1.0 - (y2 - minY) / h;
+		const u3 = (x3 - minX) / w;
+		const v3 = 1.0 - (y3 - minY) / h;
+
+		this.drawTriangleTextured(
+			this.fallbackTexture,
+			x1, y1, r1, g1, b1, a1, u1, v1,
+			x2, y2, r2, g2, b2, a2, u2, v2,
+			x3, y3, r3, g3, b3, a3, u3, v3
+		);
 	}
+
 
 	drawTriangleTextured(
 		tex: Texture,
@@ -926,6 +927,9 @@ function createProgram(
 	}
 	gl.attachShader(program, vs);
 	gl.attachShader(program, fs);
+	gl.bindAttribLocation(program, 0, "position");
+	gl.bindAttribLocation(program, 1, "color");
+	gl.bindAttribLocation(program, 2, "uv");
 	gl.linkProgram(program);
 	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 		panic("Failed to link program:\n" + gl.getProgramInfoLog(program));

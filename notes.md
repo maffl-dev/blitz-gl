@@ -3,9 +3,9 @@
 - tilemap
 
 ## Renderer
+- uniform caching and flushing via renderer
 - shadow mask pass
 - fog
-- dynamic light sources
 - set scissor
 
 ## Audio
