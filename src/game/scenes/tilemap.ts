@@ -1,5 +1,6 @@
 import { Color, white } from "@/engine/colors";
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from "@/engine/config";
+import { Input, Key } from "@/engine/input";
 import { Texture, Renderer, RenderTarget, BlendMode, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
 import { Autotile, calcMinitiles, createAutotilesFromTexture, TileID, TileLayer, TILESIZE, unpackMinitiles } from "@/engine/tiles";
@@ -11,11 +12,14 @@ class Tilemap extends Scene {
 	layers!: TileLayer[]
 	autotiles!: Autotile[]
 	texAutotiles!: Texture
+	normalAutotiles!: Texture
 	texTiles!: Texture
+	normalTexture!: Texture;
 
 	lightRenderTarget!: RenderTarget
 	lights!: Light[]
 	lightShader!: Shader;
+	normalRenderTarget!: RenderTarget
 
 	async init(r: Renderer): Promise<void> {
 		echo("init tilemap");
@@ -35,7 +39,11 @@ class Tilemap extends Scene {
 
 		// map
 		this.texAutotiles = await r.loadTex("tilesets/autotiles.png")
+		this.normalAutotiles = await r.loadTex("tilesets/autotiles_normal.png");
 		this.texTiles = await r.loadTex("tilesets/cave.png")
+		this.normalTexture = await r.loadTex("tilesets/cave_normal.png")
+		this.normalRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
+
 		this.initMap();
 	}
 
@@ -62,8 +70,8 @@ class Tilemap extends Scene {
 		this.lights[0] = {
 			x: 170,
 			y: 30,
-			color: [1, 1, 1, 0.8],
-			radius: 40
+			color: [1, 1, 1, 1.0],
+			radius: 60
 		}
 		this.lights[1] = {
 			x: 50,
@@ -74,13 +82,30 @@ class Tilemap extends Scene {
 		this.lights[2] = {
 			x: 184,
 			y: 140,
-			color: [1, 1, 1, 0.5],
-			radius: 80
+			color: [1, 1, 1, 0.3],
+			radius: 100
 		}
 	}
 
 	update(dt: number): void {
 		this.time += dt;
+
+		if (Input.keyDown(Key.W)) {
+			this.lights[0].y -= 100 * dt;
+		} else if (Input.keyDown(Key.S)) {
+			this.lights[0].y += 100 * dt;
+		}
+		if (Input.keyDown(Key.A)) {
+			this.lights[0].x -= 100 * dt;
+		} else if (Input.keyDown(Key.D)) {
+			this.lights[0].x += 100 * dt;
+		}
+
+		if (Input.keyDown(Key.Up)) {
+			this.lights[0].radius += 40 * dt;
+		} else if (Input.keyDown(Key.Down)) {
+			this.lights[0].radius -= 40 * dt;
+		}
 	}
 
 	render(r: Renderer): void {
@@ -90,11 +115,26 @@ class Tilemap extends Scene {
 		r.setShader()
 		r.setColor(...white)
 		for (let i = 0; i < this.layers.length; i++) {
+			const layer = this.layers[i];
+			if (i === 0) {
+				this.drawAutotiles(r, layer, this.texAutotiles);
+			} else {
+				this.drawLayer(r, layer, this.texTiles);
+			}
+		}
+
+		// normal map
+		r.setRenderTarget(this.normalRenderTarget)
+		r.clearRenderTarget([0.5, 0.5, 1.0, 1.0])
+		r.setBlendmode(BlendMode.Alpha)
+		r.setShader()
+		r.setColor(...white)
+		for (let i = 0; i < this.layers.length; i++) {
 			const layer = this.layers[i]
 			if (i === 0) {
-				this.drawAutotiles(r, layer, this.texAutotiles)
+				this.drawAutotiles(r, layer, this.normalAutotiles)
 			} else {
-				this.drawLayer(r, layer, this.texTiles)
+				this.drawLayer(r, layer, this.normalTexture)
 			}
 		}
 
@@ -105,12 +145,13 @@ class Tilemap extends Scene {
 		r.setBlendmode(BlendMode.Additive)
 		r.setShader(this.lightShader)
 		this.lightShader.setUniform("Resolution", [SCREEN_WIDTH, SCREEN_HEIGHT])
+		this.lightShader.setUniform("NormalTexture", this.normalRenderTarget.texture, 1)
 		for (const light of this.lights) {
 			const color = light.color;
 			if (light.radius > 0.0) {
 				this.lightShader.setUniform("LightPos", [light.x, light.y])
 				this.lightShader.setUniform("Radius", light.radius)
-				r.setColor(...color)
+				r.setColor(color[0] * color[3], color[1] * color[3], color[2] * color[3], 1);
 				r.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 				r.flush();
 			}

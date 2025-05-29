@@ -124,7 +124,7 @@ export class Texture {
 		return texture;
 	}
 
-	bind(unit: number = 0): void {
+	bind(unit: number): void {
 		this.gl.activeTexture(this.gl.TEXTURE0 + unit);
 		this.gl.bindTexture(this.gl.TEXTURE_2D, this.data);
 	}
@@ -177,11 +177,13 @@ export class Shader {
 		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 6 * Float32Array.BYTES_PER_ELEMENT);
 	}
 
-	setUniform(name: string, value: number | number[] | Texture): void {
+	setUniform(name: string, value: number | number[] | Texture, unit?: number): void {
 		this.use();
 
 		const location = this.getUniformLocation(name);
-		if (location === null) return;
+		if (location === null) {
+			panic("setUniform: uniform not found " + name)
+		}
 
 		if (typeof value === "number") {
 			this.gl.uniform1f(location, value);
@@ -196,11 +198,12 @@ export class Shader {
 				default: panic(`setUnfiorm ${name}. Unsupported uniform array length: ${value.length}`);
 			}
 		}
-
 		else if (value instanceof Texture) {
-			const unit = 0;
+			if (unit === undefined) {
+				panic(`Texture uniform '${name}' requires a texture unit`);
+			}
 			value.bind(unit);
-			this.gl.uniform1i(location, unit); // texture unit
+			this.gl.uniform1i(location, unit);
 		}
 	}
 
@@ -363,7 +366,7 @@ export class WebGLRenderer implements Renderer {
 		this.transformStack.length = 0;
 		this.setShader(this.defaultShader);
 		this.currentTexture = this.fallbackTexture;
-		this.currentTexture.bind();
+		this.currentTexture.bind(0);
 	}
 
 	flush(): void {
@@ -371,7 +374,7 @@ export class WebGLRenderer implements Renderer {
 
 		if (this.vertexCount === 0) return;
 
-		this.currentTexture.bind();
+		this.currentTexture.bind(0);
 
 		// Bind and update vertex data
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -445,7 +448,7 @@ export class WebGLRenderer implements Renderer {
 		if (this.currentTexture !== tex) {
 			this.flush();
 			this.currentTexture = tex;
-			this.currentTexture.bind();
+			// this.currentTexture.bind();
 		}
 		const t = this.currentTransform;
 		const tx1 = x1 * t.ix + y1 * t.jx + t.tx;
