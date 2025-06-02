@@ -3,87 +3,64 @@ import { SCREEN_HEIGHT, SCREEN_WIDTH } from "@/engine/config";
 import { Input, Key } from "@/engine/input";
 import { Texture, Renderer, RenderTarget, BlendMode, Shader } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
-import { Autotile, calcMinitiles, createAutotilesFromTexture, TileID, TileLayer, TILESIZE, unpackMinitiles } from "@/engine/tiles";
-import { echo, loadString, panic } from "@/engine/utils";
+import { Autotile, calcMinitiles, createAutotilesFromTexture, LayerType, TileID, TileLayer, TILESIZE, unpackMinitiles } from "@/engine/tiles";
+import { assert, echo, loadString, panic } from "@/engine/utils";
 
 class Tilemap extends Scene {
 	time: number = 0.0;
 
 	layers!: TileLayer[]
+	tilesets!: Texture[]
+	normals!: Texture[]
 	autotiles!: Autotile[]
-	texAutotiles!: Texture
-	normalAutotiles!: Texture
-	texTiles!: Texture
-	normalTexture!: Texture;
 
 	lightRenderTarget!: RenderTarget
 	lights!: Light[]
 	lightShader!: Shader;
-	normalRenderTarget!: RenderTarget
+	normalsRenderTarget!: RenderTarget
 
 	async init(r: Renderer): Promise<void> {
 		echo("init tilemap");
 
-		// lights
 		this.lightRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
-		this.lights = new Array(20)
-		for (let i = 0; i < this.lights.length; i++) {
-			this.lights[i] = {
-				x: 0,
-				y: 0,
-				radius: 0,
-				color: white,
-			}
-		}
 		this.lightShader = r.createFragShader(loadString("shaders/light.fs"))
+		this.normalsRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-		// map
-		this.texAutotiles = await r.loadTex("tilesets/autotiles.png")
-		this.normalAutotiles = await r.loadTex("tilesets/autotiles_normal.png");
-		this.texTiles = await r.loadTex("tilesets/cave.png")
-		this.normalTexture = await r.loadTex("tilesets/cave_normal.png")
-		this.normalRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
-
-		this.initMap();
+		await this.initMap(r);
 	}
 
-	initMap(): void {
-		const nrOfLayers = 1 + 6
+	async initMap(r: Renderer): Promise<void> {
+		const mapName = "mines";
+		const mapInfo = loadString(`maps/${mapName}/map.json`);
+		const json = JSON.parse(mapInfo);
+		const info = json.info;
+		const nrOfLayers = json.layers.length;
+		const nrOfLights = json.lights.length;
+
 		this.layers = new Array(nrOfLayers)
+		this.tilesets = new Array(nrOfLayers)
+		this.normals = new Array(nrOfLayers)
+
+		// layers
 		for (let i = 0; i < this.layers.length; i++) {
-			this.layers[i] = new TileLayer(17, 11)
+			const layer = json.layers[i];
+			const type = LayerType[layer.type as keyof typeof LayerType]
+			assert(type !== undefined, "Mapload Error! Layer type invalid: " + layer.type)
+			this.layers[i] = new TileLayer(info.width, info.height, type)
+			this.layers[i].decodeRLE(layer.data)
+
+			this.tilesets[i] = await r.loadTex(`tilesets/${layer.tileset}.png`)
+			if (type === LayerType.Autotiles) {
+				// TODO: multiple autotiles
+				this.autotiles = createAutotilesFromTexture(this.tilesets[i]);
+			}
+			this.normals[i] = await r.loadTex(`tilesets/${layer.tileset}_normal.png`)
 		}
-		// autotiles
-		this.layers[0].decodeRLE("x24 28 x3 17 x14 28 x3 17 x9 28 x8 17 x9 28 x8 17 x9 28 x8 17 x9 28 x8 17 x9 28 x7 17 x59 28")
-
-		// normal layers
-		this.layers[1].decodeRLE("x24 -1 54 283 52 x14 -1 79 308 77 x9 -1 65 53 66 67 54 104 333 102 x9 -1 x2 78 91 78 79 x12 -1 x2 103 116 103 104 x95 -1")
-		this.layers[2].decodeRLE("x58 -1 100 x29 -1 100 x38 -1 125 x59 -1")
-		this.layers[3].decodeRLE("x187 -1")
-		this.layers[4].decodeRLE("x8 -1 140 x102 -1 130 156 x7 -1 155 x7 131 156 0 x7 -1 0 x7 -1 0 x11 -1 0 x3 -1 0 x25 -1")
-		this.layers[5].decodeRLE("x187 -1")
-		this.layers[6].decodeRLE("x187 -1")
-
-		this.autotiles = createAutotilesFromTexture(this.texAutotiles);
 
 		// lights
-		this.lights[0] = {
-			x: 170,
-			y: 30,
-			color: [1, 1, 1, 1.0],
-			radius: 60
-		}
-		this.lights[1] = {
-			x: 50,
-			y: 50,
-			color: [1, 1, 1, 1.0],
-			radius: 70
-		}
-		this.lights[2] = {
-			x: 184,
-			y: 140,
-			color: [1, 1, 1, 0.3],
-			radius: 100
+		this.lights = new Array(nrOfLights)
+		for (let i = 0; i < this.lights.length; i++) {
+			this.lights[i] = json.lights[i]
 		}
 	}
 
@@ -116,15 +93,15 @@ class Tilemap extends Scene {
 		r.setColor(...white)
 		for (let i = 0; i < this.layers.length; i++) {
 			const layer = this.layers[i];
-			if (i === 0) {
-				this.drawAutotiles(r, layer, this.texAutotiles);
+			if (layer.type === LayerType.Autotiles) {
+				this.drawAutotiles(r, layer, this.tilesets[i]);
 			} else {
-				this.drawLayer(r, layer, this.texTiles);
+				this.drawLayer(r, layer, this.tilesets[i]);
 			}
 		}
 
 		// normal map
-		r.setRenderTarget(this.normalRenderTarget)
+		r.setRenderTarget(this.normalsRenderTarget)
 		r.clearRenderTarget([0.5, 0.5, 1.0, 1.0])
 		r.setBlendmode(BlendMode.Alpha)
 		r.setShader()
@@ -132,9 +109,9 @@ class Tilemap extends Scene {
 		for (let i = 0; i < this.layers.length; i++) {
 			const layer = this.layers[i]
 			if (i === 0) {
-				this.drawAutotiles(r, layer, this.normalAutotiles)
+				this.drawAutotiles(r, layer, this.normals[i])
 			} else {
-				this.drawLayer(r, layer, this.normalTexture)
+				this.drawLayer(r, layer, this.normals[i])
 			}
 		}
 
@@ -145,7 +122,7 @@ class Tilemap extends Scene {
 		r.setBlendmode(BlendMode.Additive)
 		r.setShader(this.lightShader)
 		this.lightShader.setUniform("Resolution", [SCREEN_WIDTH, SCREEN_HEIGHT])
-		this.lightShader.setUniform("NormalTexture", this.normalRenderTarget.texture, 1)
+		this.lightShader.setUniform("NormalTexture", this.normalsRenderTarget.texture, 1)
 		for (const light of this.lights) {
 			const color = light.color;
 			if (light.radius > 0.0) {

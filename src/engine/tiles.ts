@@ -14,9 +14,7 @@ export enum TileDirection {
 
 export enum LayerType {
 	Normal,
-	NormalTop,
 	Autotiles,
-	AutotilesTop,
 	Collision,
 	Zone
 }
@@ -31,10 +29,12 @@ export class TileLayer {
 	private w: number
 	private h: number
 	private tiles: number[]
+	private _type: LayerType
 
-	constructor(w: number, h: number) {
+	constructor(w: number, h: number, type: LayerType) {
 		this.w = w
 		this.h = h
+		this._type = type;
 		this.tiles = new Array(w * h)
 		this.fill(this.emptyTile())
 	}
@@ -49,6 +49,10 @@ export class TileLayer {
 
 	get height(): number {
 		return this.h;
+	}
+
+	get type(): number {
+		return this._type;
 	}
 
 	fill(id: number): void {
