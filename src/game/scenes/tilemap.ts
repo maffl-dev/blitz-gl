@@ -13,6 +13,8 @@ class Tilemap extends Scene {
 	tilesets!: Texture[]
 	normals!: Texture[]
 	autotiles!: Autotile[]
+	collision!: TileLayer
+	collisionTex!: Texture
 
 	lightRenderTarget!: RenderTarget
 	lights!: Light[]
@@ -66,11 +68,26 @@ class Tilemap extends Scene {
 			this.normals[i] = await r.loadTex(`tilesets/${layer.tileset}_normal.png`)
 		}
 
+		// collision
+		this.collision = new TileLayer(info.width, info.height, LayerType.Collision)
+		this.collision.decodeRLE(json.collision.data)
+		if (import.meta.env.MODE === "development") {
+			this.collisionTex = await r.loadTex("dev/collisionset.png")
+		}
+
 		// lights
 		this.lights = new Array(nrOfLights)
 		for (let i = 0; i < this.lights.length; i++) {
 			this.lights[i] = json.lights[i]
 		}
+	}
+
+	get width(): number {
+		return this.layers[0].width;
+	}
+
+	get height(): number {
+		return this.layers[0].height;
 	}
 
 	update(dt: number): void {
@@ -148,6 +165,23 @@ class Tilemap extends Scene {
 		r.setShader()
 		r.setColor(...white)
 		r.drawRenderTarget(this.lightRenderTarget, 0, 0)
+		r.setBlendmode(BlendMode.Alpha)
+
+		// debug-draw
+		const showCollision = true;
+		const showGrid = true;
+		if (showCollision) {
+			this.drawLayer(r, this.collision, this.collisionTex)
+		}
+		if (showGrid) {
+			r.setColor(0.5, 0.5, 0.5, 0.4)
+			for (let x = 1; x < this.width; x++) {
+				r.drawRect(x * TILESIZE, 0, 1, this.height * TILESIZE)
+			}
+			for (let y = 1; y < this.height; y++) {
+				r.drawRect(0, y * TILESIZE, this.width * TILESIZE, 1)
+			}
+		}
 	}
 
 	drawLayer(r: Renderer, layer: TileLayer, tileset: Texture): void {

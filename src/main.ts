@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { Audio } from "./engine/audio"
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from "./engine/config"
 import { Engine } from "./engine/engine"
