@@ -17,6 +17,7 @@ class Tilemap extends Scene {
 	lightRenderTarget!: RenderTarget
 	lights!: Light[]
 	lightShader!: Shader;
+	lightRamp!: Texture;
 	normalsRenderTarget!: RenderTarget
 
 	public ambientColor: Color = [0.5, 0.5, 1.0, 1.0]
@@ -26,6 +27,7 @@ class Tilemap extends Scene {
 
 		this.lightRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
 		this.lightShader = r.createFragShader(loadString("shaders/light.fs"))
+		this.lightRamp = await r.loadTex("shaders/lightramp.png")
 		this.normalsRenderTarget = r.createRenderTarget(SCREEN_WIDTH, SCREEN_HEIGHT)
 
 		await this.initMap(r);
@@ -130,6 +132,7 @@ class Tilemap extends Scene {
 		r.setShader(this.lightShader)
 		this.lightShader.setUniform("Resolution", [SCREEN_WIDTH, SCREEN_HEIGHT])
 		this.lightShader.setUniform("NormalTexture", this.normalsRenderTarget.texture, 1)
+		this.lightShader.setUniform("LightRamp", this.lightRamp, 2)
 		for (const light of this.lights) {
 			const color = light.color;
 			if (light.radius > 0.0) {
