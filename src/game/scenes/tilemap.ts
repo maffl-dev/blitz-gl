@@ -19,6 +19,8 @@ class Tilemap extends Scene {
 	lightShader!: Shader;
 	normalsRenderTarget!: RenderTarget
 
+	public ambientColor: Color = [0.5, 0.5, 1.0, 1.0]
+
 	async init(r: Renderer): Promise<void> {
 		echo("init tilemap");
 
@@ -37,6 +39,10 @@ class Tilemap extends Scene {
 		const nrOfLayers = json.layers.length;
 		const nrOfLights = json.lights.length;
 
+		this.ambientColor[0] = info.ambient_color[0]
+		this.ambientColor[1] = info.ambient_color[1]
+		this.ambientColor[2] = info.ambient_color[2]
+
 		this.layers = new Array(nrOfLayers)
 		this.tilesets = new Array(nrOfLayers)
 		this.normals = new Array(nrOfLayers)
@@ -49,6 +55,7 @@ class Tilemap extends Scene {
 			this.layers[i] = new TileLayer(info.width, info.height, type)
 			this.layers[i].decodeRLE(layer.data)
 
+			// TODO: load from cache
 			this.tilesets[i] = await r.loadTex(`tilesets/${layer.tileset}.png`)
 			if (type === LayerType.Autotiles) {
 				// TODO: multiple autotiles
@@ -116,9 +123,9 @@ class Tilemap extends Scene {
 		}
 
 		// lightmap
-		const ambient = 0.3;
+		const ambient = this.ambientColor;
 		r.setRenderTarget(this.lightRenderTarget)
-		r.clearRenderTarget([ambient, ambient, ambient, 1.0])
+		r.clearRenderTarget([ambient[0], ambient[1], ambient[2], 1.0])
 		r.setBlendmode(BlendMode.Additive)
 		r.setShader(this.lightShader)
 		this.lightShader.setUniform("Resolution", [SCREEN_WIDTH, SCREEN_HEIGHT])

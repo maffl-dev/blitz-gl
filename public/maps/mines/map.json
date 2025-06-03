@@ -3,7 +3,12 @@
 		"width": 17,
 		"height": 11,
 		"start_x": 8,
-		"start_y": 1
+		"start_y": 1,
+		"ambient_color": [
+			0.4,
+			0.3,
+			0.8
+		]
 	},
 	"layers": [
 		{
@@ -30,16 +35,6 @@
 			"type": "Normal",
 			"tileset": "cave",
 			"data": "x8 -1 140 x102 -1 130 156 x7 -1 155 x7 131 156 0 x7 -1 0 x7 -1 0 x11 -1 0 x3 -1 0 x25 -1"
-		},
-		{
-			"type": "Normal",
-			"tileset": "cave",
-			"data": "x187 -1"
-		},
-		{
-			"type": "Normal",
-			"tileset": "cave",
-			"data": "x187 -1"
 		}
 	],
 	"lights": [
