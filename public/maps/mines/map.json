@@ -29,7 +29,7 @@
 		{
 			"type": "Normal",
 			"tileset": "cave",
-			"data": "x187 -1"
+			"data": "x93 -1 12 x94 -1"
 		},
 		{
 			"type": "Normal",

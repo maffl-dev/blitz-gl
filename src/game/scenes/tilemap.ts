@@ -168,8 +168,8 @@ class Tilemap extends Scene {
 		r.setBlendmode(BlendMode.Alpha)
 
 		// debug-draw
-		const showCollision = true;
-		const showGrid = true;
+		const showCollision = false;
+		const showGrid = false;
 		if (showCollision) {
 			this.drawLayer(r, this.collision, this.collisionTex)
 		}
