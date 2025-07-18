@@ -20,6 +20,8 @@ For simple playback you can simply call: `Audio.playSound("/sounds/my_sound.wav"
 ### Examples
 - `src/game/scenes/test.ts`: Test Scene that shows basic rendering, audio playback & fading and the polling input system.
 - `src/game/scenes/tilemap.ts`: Uses a custom light shader that uses normal mapping to simulate light that interacts with the enironment (see gif below). Doesn't look right yet, as the normal-map itself isn't correct.
+  
+![normal mapping](https://github.com/user-attachments/assets/80b57e51-206e-4491-ac0c-667558ffdff5)
 
 ### How to run locally
 1) Install dependencies: `yarn`
