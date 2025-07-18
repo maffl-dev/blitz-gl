@@ -1,9 +1,9 @@
-import { testSound } from "@/engine/audio";
-import { Color, red, semiGreen, white } from "@/engine/colors";
+import { Audio } from "@/engine/audio";
+import { Color, semiGreen, white } from "@/engine/colors";
 import { Input, Key, Mouse } from "@/engine/input";
 import { BlendMode, Texture, Renderer, Shader, RenderTarget } from "@/engine/renderer";
 import { Scene } from "@/engine/scene";
-import { echo, loadString } from "@/engine/utils";
+import { echo, loadString, profile } from "@/engine/utils";
 
 class TestScene extends Scene {
 	x: number = 0.0
@@ -12,9 +12,9 @@ class TestScene extends Scene {
 	private bwShader!: Shader;
 	private glitchShader!: Shader;
 
-	init(r: Renderer): void {
+	async init(r: Renderer): Promise<void> {
 		echo("init test scene");
-		this.myTexture = r.loadTex("/common/test.png")
+		this.myTexture = await r.loadTex("/common/test.png")
 
 		const bw = loadString("/shaders/bw.fs");
 		this.bwShader = r.createFragShader(bw)
@@ -60,21 +60,105 @@ class TestScene extends Scene {
 		}
 	}
 
+	// audio funcs
 	testAudio(): void {
-		testSound();
+		// this.testSoundSimple();
+		// this.testSoundPanning();
+		this.testSoundFading();
+		// this.testMusicSound();
+		// this.testMusicStream();
+	}
+
+	testSoundSimple(): void {
+		if (Input.keyHit(Key.Space)) {
+			Audio.setVolume(1)
+			const ms = performance.now();
+			Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+				echo(performance.now() - ms)
+				Audio.playSound(sound, { rate: 1.2, volume: 1.0, channel: 30 })
+
+				setTimeout(() => {
+					// Audio.setChannelVolume(30, 0.1)
+				}, 150);
+			})
+		}
+	}
+
+	testSoundPanning(): void {
+		const channel = 1;
+
+		if (Input.keyHit(Key.Space)) {
+			Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+				profile(() => {
+					Audio.playSound(sound, { loop: true, channel: channel });
+				})
+			})
+		}
+
+		if (Input.mouseHit(Mouse.Left)) {
+			echo("pan left")
+			Audio.setChannelPan(channel, -1);
+		} else if (Input.mouseHit(Mouse.Right)) {
+			echo("pan right")
+			Audio.setChannelPan(channel, 1);
+		}
+	}
+
+	testSoundFading(): void {
+		const channel = 1;
+
+		if (Input.keyHit(Key.Space)) {
+			echo(Audio.channelState(channel))
+			Audio.loadSound("/sounds/cast_hero.wav").then((sound) => {
+				profile(() => {
+					Audio.playSound(sound, { loop: true, channel: channel });
+				})
+			})
+		}
+
+		if (Input.mouseHit(Mouse.Left)) {
+			echo("fade out", Audio.channelState(channel))
+			Audio.fadeChannelTo(channel, 0.0, 2.0);
+		} else if (Input.mouseHit(Mouse.Right)) {
+			echo("fade in", Audio.channelState(channel))
+			Audio.fadeChannelTo(channel, 1.0, 2.0);
+		}
+	}
+
+	testMusicSound() {
+		const ms = Date.now();
+		Audio.loadSound("/music/battle.ogg").then((sound) => {
+			echo(Date.now() - ms)
+			Audio.playSound(sound)
+		})
+	}
+
+	testMusicStream() {
+		if (Input.keyHit(Key.Space)) {
+			const ms = performance.now();
+			Audio.playMusic("/music/battle.ogg", true).then(() => {
+				echo(performance.now() - ms)
+			})
+			// Audio.musicPlayer.fadeTo(1.0, 2.0);
+		} else if (Input.keyHit(Key.Digit1)) {
+			// Audio.pauseMusic()
+			echo(Audio.isMusicPlaying())
+			Audio.fadeMusic(0.0, 1.0);
+		} else if (Input.keyHit(Key.Digit2)) {
+			// Audio.resumeMusic()
+			Audio.fadeMusic(1.0, 1.0)
+			echo(Audio.isMusicPlaying())
+		}
 	}
 
 
+	// rendering
 	render(r: Renderer): void {
 		// this.drawBasic(r)
 		// this.drawShapes(r)
 		// this.drawTextures(r)
 		// this.drawTranslated(r)
 		this.drawToTexture(r);
-	}
-
-	clearColor(): Color {
-		return [0.5, 0.5, 0.5, 1.0]
 	}
 
 	drawBasic(r: Renderer): void {
@@ -162,6 +246,11 @@ class TestScene extends Scene {
 			r.drawRect(0, 0, 10, 10)
 		}
 		r.pop()
+	}
+
+	// returned color will be the background color
+	clearColor(): Color {
+		return [0.5, 0.5, 0.5, 1.0]
 	}
 
 	private rt!: RenderTarget

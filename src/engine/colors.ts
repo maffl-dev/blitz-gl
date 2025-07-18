@@ -1,3 +1,4 @@
+// r, g, b, a
 export type Color = [number, number, number, number];
 
 // Colors

@@ -94,9 +94,9 @@ class Tilemap extends Scene {
 		this.time += dt;
 
 		if (Input.keyDown(Key.W)) {
-			this.lights[0].y -= 100 * dt;
+			this.lights[0].y -= 20 * dt;
 		} else if (Input.keyDown(Key.S)) {
-			this.lights[0].y += 100 * dt;
+			this.lights[0].y += 20 * dt;
 		}
 		if (Input.keyDown(Key.A)) {
 			this.lights[0].x -= 100 * dt;
@@ -105,9 +105,9 @@ class Tilemap extends Scene {
 		}
 
 		if (Input.keyDown(Key.Up)) {
-			this.lights[0].radius += 40 * dt;
+			this.lights[0].radius += 10 * dt;
 		} else if (Input.keyDown(Key.Down)) {
-			this.lights[0].radius -= 40 * dt;
+			this.lights[0].radius -= 10 * dt;
 		}
 	}
 

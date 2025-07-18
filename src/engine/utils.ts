@@ -20,10 +20,6 @@ export function assert(condition: any, message: string = "Assertion failed"): as
 	}
 }
 
-export function clamp(n: number, min: number, max: number): number {
-	return Math.max(min, Math.min(n, max));
-}
-
 export function loadString(path: string): string {
 	const request = new XMLHttpRequest();
 	request.open('GET', path, false);  // false makes the request synchronous

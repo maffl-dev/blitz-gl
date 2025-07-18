@@ -1,5 +1,6 @@
 import { Color, white } from "./colors";
-import { assert, clamp, echo, loadString, panic } from "./utils";
+import { clamp } from "./math";
+import { assert, echo, loadString, panic } from "./utils";
 
 export interface Renderer {
 	// low level basics

@@ -1,8 +1,9 @@
-import { assert, clamp } from "./utils"
+import { assert } from "./utils"
 import { Renderer } from "./renderer"
 import { Scene } from "./scene"
 import { SystemManager } from "./systems"
 import { Input } from "./input"
+import { clamp } from "./math"
 
 export class Engine {
 	lastTime: number = 0
