@@ -379,6 +379,7 @@ export class WebGLRenderer implements Renderer {
 
 		// Bind and update vertex data
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, this.vertexData.byteLength, gl.DYNAMIC_DRAW); // vbo orphaning
 		gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * this.VERTEX_SIZE));
 
 		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
