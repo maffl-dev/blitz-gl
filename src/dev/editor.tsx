@@ -7,7 +7,11 @@ interface Props {
 }
 
 export function EditorUI(props: Props) {
-    return <Metrics renderer={props.engine.renderer} />;
+    return (
+        <>
+            <Metrics renderer={props.engine.renderer} />
+        </>
+    );
 }
 
 function Metrics({ renderer }: { renderer: Renderer }) {
