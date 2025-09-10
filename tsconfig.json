@@ -25,6 +25,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
+
+	"jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "esModuleInterop": true,
   },
   "include": ["src"],
   "exclude": ["node_modules"]

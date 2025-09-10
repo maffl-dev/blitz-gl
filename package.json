@@ -1,5 +1,5 @@
 {
-	"name": "fts",
+	"name": "blitz-gl",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
@@ -9,8 +9,14 @@
 		"preview": "vite preview"
 	},
 	"devDependencies": {
+		"@preact/preset-vite": "^2.10.2",
 		"@types/node": "^22.14.1",
 		"typescript": "~5.7.2",
 		"vite": "^6.3.0"
+	},
+	"dependencies": {
+		"@tailwindcss/vite": "^4.1.13",
+		"preact": "^10.27.1",
+		"tailwindcss": "^4.1.13"
 	}
 }
